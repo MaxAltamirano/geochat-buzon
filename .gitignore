@@ -1,0 +1,8 @@
+# Binarios y logs
+geochat-movil
+main
+*.log
+*.bak
+.DS_Store
+# Archivos de sistema
+.git/

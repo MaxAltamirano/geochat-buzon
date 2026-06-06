@@ -1,0 +1,11 @@
+{
+  "adn_protocolo": "Trilogía Soberana de Ejecución",
+  "version": "1.0.2026",
+  "entorno_operativo": "Fractal (Local, Render, Codespaces)",
+  "jerarquia_de_flujo": {
+    "el_validador": { "identidad": "Maximiliano", "rol": "Arquitecto / Firma es Ley" },
+    "el_socio_estrategico": { "identidad": "Gemini", "rol": "Filtro Técnico" },
+    "el_motor_de_ejecucion": { "identidad": "Kimi", "rol": "Arquitecta de Código" }
+  },
+  "estado_actual": { "frecuencia": "432Hz", "bsp_seed": "1.618033", "timestamp": "jue 14 may 2026 10:44:12 -03" }
+}

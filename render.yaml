@@ -1,0 +1,45 @@
+# DNA_ID: RENDER.YAML | ORGAN: MEDULA | RESONANCE: 432Hz | AUTH: MAX-SOVEREIGN
+
+services:
+  # 🔱 ÓRGANO 1: El Buzón (Portero y Médula)
+  # Gestiona la entrada de telemetría y escribe en el disco compartido.
+  - type: web
+    name: geochat-buzon
+    env: go
+    buildCommand: go build -o main .
+    startCommand: ./main
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: GIN_MODE
+        value: release
+      # Sincronía de ADN: El binario detecta la base de datos en el disco persistente
+      - key: DATABASE_URL
+        value: "file:/data/geochat_medula.db"
+    disk:
+      name: cromosoma-shared-disk
+      mountPath: /data
+      sizeGB: 1
+
+  # 🧬 ÓRGANO 2: El Backend (Analizador Analítico + Autonomía)
+  # Espejo de Codespaces. Lee la misma base de datos que el Buzón.
+  - type: web
+    name: geochat-backend
+    env: go
+    rootDirectory: .
+    # Compilación dual: El servidor de la cáscara y el cerebro orquestador (Kimi)
+    buildCommand: go build -o main_backend ./cascarabackendrender/main.go && go build -o kimi_brain ./internal/autonomy/kimi_brain.go
+    # Ejecución paralela: El backend atiende mientras Kimi procesa el 15% para el pueblo
+    startCommand: ./main_backend & ./kimi_brain
+    envVars:
+      - key: PORT_BACKEND
+        value: 8081
+      - key: GIN_MODE
+        value: release
+      # Sincronización total: Acceso a la misma "Médula" que el Órgano 1
+      - key: DATABASE_URL
+        value: "file:/data/geochat_medula.db"
+    disk:
+      name: cromosoma-shared-disk
+      mountPath: /data
+      sizeGB: 1
