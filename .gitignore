@@ -6,3 +6,5 @@ main
 .DS_Store
 # Archivos de sistema
 .git/
+go.sum
+index.html
