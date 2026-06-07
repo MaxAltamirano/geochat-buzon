@@ -14,9 +14,11 @@ import (
 )
 
 // Médula: Estructura de mensajes para el estado persistente
+
 type MensajePendiente struct {
 	ID        int       `json:"id"`
 	Contenido string    `json:"contenido"`
+	Tipo      string    `json:"tipo"` // <--- NUEVO: "LITERAL" o "MODULAR"
 	Estado    string    `json:"estado"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -69,6 +71,7 @@ func recibirMensajeExterno(w http.ResponseWriter, r *http.Request) {
 	var m MensajePendiente
 	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		log.Printf("❌ [MÉDULA]: Error decodificando payload: %v", err)
 		return
 	}
 
@@ -76,11 +79,18 @@ func recibirMensajeExterno(w http.ResponseWriter, r *http.Request) {
 	mensajes := cargarDeDisco()
 	m.Estado = "PENDING_DELIVERY"
 	m.CreatedAt = time.Now()
-	// Asignación simple de ID basada en el largo del slice para este modo local
 	m.ID = len(mensajes) + 1
 	mensajes = append(mensajes, m)
 	guardarEnDisco(mensajes)
 	mutex.Unlock()
+
+	// Lógica de Alineación Cognitiva:
+	// El Buzón ahora clasifica el mensaje según su naturaleza (MODULAR o LITERAL)
+	if m.Tipo == "MODULAR" {
+		log.Printf("🏗️ [MÉDULA-NODO]: Estructura modular recibida (ID #%d). Preparando para compilación.", m.ID)
+	} else {
+		log.Printf("💬 [MÉDULA-NODO]: Respuesta literal registrada (ID #%d).", m.ID)
+	}
 
 	w.WriteHeader(http.StatusAccepted)
 }
