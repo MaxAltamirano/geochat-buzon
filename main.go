@@ -18,7 +18,7 @@ import (
 type MensajePendiente struct {
 	ID        int       `json:"id"`
 	Contenido string    `json:"contenido"`
-	Tipo      string    `json:"tipo"` // <--- NUEVO: "LITERAL" o "MODULAR"
+	Tipo      string    `json:"tipo"` // <--- EL PROBLEMA: Si el JSON viene como "tipo", esta etiqueta es correcta.
 	Estado    string    `json:"estado"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -75,6 +75,11 @@ func recibirMensajeExterno(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// --- LOG DE DEPURACIÓN (Capa de Observabilidad) ---
+	// Esto nos dirá exactamente si el JSON llega con el campo "tipo" lleno o vacío
+	log.Printf("🔍 [DEBUG]: JSON decodificado -> ID: %d, Contenido: %.20s..., Tipo recibido: '%s'", m.ID, m.Contenido, m.Tipo)
+	// --------------------------------------------------
+
 	mutex.Lock()
 	mensajes := cargarDeDisco()
 	m.Estado = "PENDING_DELIVERY"
@@ -84,12 +89,11 @@ func recibirMensajeExterno(w http.ResponseWriter, r *http.Request) {
 	guardarEnDisco(mensajes)
 	mutex.Unlock()
 
-	// Lógica de Alineación Cognitiva:
-	// El Buzón ahora clasifica el mensaje según su naturaleza (MODULAR o LITERAL)
+	// Lógica de Alineación Cognitiva
 	if m.Tipo == "MODULAR" {
 		log.Printf("🏗️ [MÉDULA-NODO]: Estructura modular recibida (ID #%d). Preparando para compilación.", m.ID)
 	} else {
-		log.Printf("💬 [MÉDULA-NODO]: Respuesta literal registrada (ID #%d).", m.ID)
+		log.Printf("💬 [MÉDULA-NODO]: Respuesta literal registrada (ID #%d). Tipo detectado: '%s'", m.ID, m.Tipo)
 	}
 
 	w.WriteHeader(http.StatusAccepted)
