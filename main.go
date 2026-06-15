@@ -38,6 +38,17 @@ func main() {
 	http.HandleFunc("/api/ordenar", recibirMensajeExterno)
 	http.HandleFunc("/api/upload_modular", recibirFragmentoModular) // <-- Esto elimina el error "unused"
 
+	// RUTA DE SALIDA (Añade esto para resolver el 404)
+    http.HandleFunc("/api/buzon/salida", func(w http.ResponseWriter, r *http.Request) {
+        log.Println("📡 [PETICIÓN]: Nodo consultando estado del buzón...")
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]string{
+            "status": "online",
+            "info":   "Buzón operativo, Médula en espera de sincronización.",
+        })
+    })
+	
+
 	// Iniciar servidor
 	port := os.Getenv("PORT")
 	if port == "" {
