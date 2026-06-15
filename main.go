@@ -39,15 +39,21 @@ func main() {
 	http.HandleFunc("/api/upload_modular", recibirFragmentoModular) // <-- Esto elimina el error "unused"
 
 	// RUTA DE SALIDA (Añade esto para resolver el 404)
-    http.HandleFunc("/api/buzon/salida", func(w http.ResponseWriter, r *http.Request) {
-        log.Println("📡 [PETICIÓN]: Nodo consultando estado del buzón...")
-        w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(map[string]string{
-            "status": "online",
-            "info":   "Buzón operativo, Médula en espera de sincronización.",
-        })
-    })
-	
+	// RUTA DE SALIDA (Ajustada para enviar el array real de mensajes)
+http.HandleFunc("/api/buzon/salida", func(w http.ResponseWriter, r *http.Request) {
+    mutex.Lock()
+    mensajes := cargarDeDisco() // Esto ya devuelve []MensajePendiente
+    mutex.Unlock()
+
+    w.Header().Set("Content-Type", "application/json")
+    
+    // Si la lista está vacía, enviamos un array vacío [] para que el v-for no explote
+    if len(mensajes) == 0 {
+        w.Write([]byte("[]"))
+    } else {
+        json.NewEncoder(w).Encode(mensajes)
+    }
+})	
 
 	// Iniciar servidor
 	port := os.Getenv("PORT")
