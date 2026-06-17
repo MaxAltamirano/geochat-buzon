@@ -16,11 +16,11 @@ import (
 // Médula: Estructura de mensajes para el estado persistente
 
 type MensajePendiente struct {
-	ID        int       `json:"id"`
-	Contenido string    `json:"contenido"`
-	Tipo      string    `json:"tipo"` // <--- EL PROBLEMA: Si el JSON viene como "tipo", esta etiqueta es correcta.
-	Estado    string    `json:"estado"`
-	CreatedAt time.Time `json:"created_at"`
+    ID        int       `json:"id"`
+    Mensaje   string    `json:"mensaje"` // Renombrado de Contenido a Mensaje para coincidir con Vue
+    Tipo      string    `json:"tipo"`    // "KIMI" o "USUARIO"
+    Estado    string    `json:"estado"`
+    CreatedAt time.Time `json:"created_at"`
 }
 
 const archivoPersistencia = "medula_local.json"
@@ -94,7 +94,7 @@ func recibirMensajeExterno(w http.ResponseWriter, r *http.Request) {
 
 	// --- LOG DE DEPURACIÓN (Capa de Observabilidad) ---
 	// Esto nos dirá exactamente si el JSON llega con el campo "tipo" lleno o vacío
-	log.Printf("🔍 [DEBUG]: JSON decodificado -> ID: %d, Contenido: %.20s..., Tipo recibido: '%s'", m.ID, m.Contenido, m.Tipo)
+	log.Printf("🔍 [DEBUG]: JSON decodificado -> ID: %d, Contenido: %.20s..., Tipo recibido: '%s'", m.ID, m.Mensaje, m.Tipo)
 	// --------------------------------------------------
 
 	mutex.Lock()
