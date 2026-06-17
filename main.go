@@ -59,7 +59,7 @@ func main() {
     // Iniciar servidor
     port := os.Getenv("PORT")
     if port == "" {
-        port = "8080"
+        port = "10000"
     }
 
     log.Printf("🚀 Córtex Buzón Online escuchando en :%s", port)
