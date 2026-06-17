@@ -30,39 +30,46 @@ var (
 )
 
 func main() {
-	log.Println("🧬 MÉDULA LOCAL: Operando con persistencia en disco.")
+    log.Println("🧬 MÉDULA LOCAL: Operando con persistencia en disco.")
 
-	// 2. Rutas del Buzón
-	http.HandleFunc("/api/enviar", recibirMensajeExterno)
-	http.HandleFunc("/api/sincronizar", vaciarCola)
-	http.HandleFunc("/api/ordenar", recibirMensajeExterno)
-	http.HandleFunc("/api/upload_modular", recibirFragmentoModular) // <-- Esto elimina el error "unused"
+    // Crea un nuevo Mux en lugar de usar el default
+    mux := http.NewServeMux()
 
-	// RUTA DE SALIDA (Añade esto para resolver el 404)
-	// RUTA DE SALIDA (Ajustada para enviar el array real de mensajes)
-http.HandleFunc("/api/buzon/salida", func(w http.ResponseWriter, r *http.Request) {
-    mutex.Lock()
-    mensajes := cargarDeDisco() // Esto ya devuelve []MensajePendiente
-    mutex.Unlock()
-
-    w.Header().Set("Content-Type", "application/json")
+    // 1. Rutas del Buzón
+    mux.HandleFunc("/api/enviar", recibirMensajeExterno)
+    mux.HandleFunc("/api/sincronizar", vaciarCola)
+    mux.HandleFunc("/api/ordenar", recibirMensajeExterno)
+    mux.HandleFunc("/api/upload_modular", recibirFragmentoModular)
     
-    // Si la lista está vacía, enviamos un array vacío [] para que el v-for no explote
-    if len(mensajes) == 0 {
-        w.Write([]byte("[]"))
-    } else {
+    // 2. Ruta de Salud (Crucial para que Render no tire 404)
+    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(http.StatusOK)
+        w.Write([]byte("Córtex Buzón Online - Operativo"))
+    })
+
+    // 3. Ruta de Salida
+    mux.HandleFunc("/api/buzon/salida", func(w http.ResponseWriter, r *http.Request) {
+        mutex.Lock()
+        mensajes := cargarDeDisco()
+        mutex.Unlock()
+        w.Header().Set("Content-Type", "application/json")
         json.NewEncoder(w).Encode(mensajes)
+    })
+
+    // Iniciar servidor
+    port := os.Getenv("PORT")
+    if port == "" {
+        port = "8080"
     }
-})	
 
-	// Iniciar servidor
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	log.Printf("🚀 Córtex Buzón Online (Persistencia Local) en puerto %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+    log.Printf("🚀 Córtex Buzón Online escuchando en :%s", port)
+    
+    // Escuchar en 0.0.0.0 es obligatorio en entornos cloud como Render
+    server := &http.Server{
+        Addr:    "0.0.0.0:" + port,
+        Handler: mux,
+    }
+    log.Fatal(server.ListenAndServe())
 }
 
 // Funciones auxiliares de persistencia
