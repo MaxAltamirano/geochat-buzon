@@ -16,60 +16,75 @@ import (
 // Médula: Estructura de mensajes para el estado persistente
 
 type MensajePendiente struct {
-    ID        int       `json:"id"`
-    Mensaje   string    `json:"mensaje"` // Renombrado de Contenido a Mensaje para coincidir con Vue
-    Tipo      string    `json:"tipo"`    // "KIMI" o "USUARIO"
-    Estado    string    `json:"estado"`
-    CreatedAt time.Time `json:"created_at"`
+	ID        int       `json:"id"`
+	Mensaje   string    `json:"mensaje"` // Renombrado de Contenido a Mensaje para coincidir con Vue
+	Tipo      string    `json:"tipo"`    // "KIMI" o "USUARIO"
+	Estado    string    `json:"estado"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 const archivoPersistencia = "medula_local.json"
-
+// --- VARIABLES GLOBALES DE ESTADO ---
 var (
-	mutex sync.Mutex
+	mensajes = []MensajePendiente{}
+	mu       sync.Mutex // Bloqueo para operaciones seguras
+
 )
 
+
 func main() {
-    log.Println("🧬 MÉDULA LOCAL: Operando con persistencia en disco.")
+	log.Println("🧬 MÉDULA LOCAL: Operando con persistencia en disco.")
 
-    // Crea un nuevo Mux en lugar de usar el default
-    mux := http.NewServeMux()
+	// Crea un nuevo Mux en lugar de usar el default
+	mux := http.NewServeMux()
 
-    // 1. Rutas del Buzón
-    mux.HandleFunc("/api/enviar", recibirMensajeExterno)
-    mux.HandleFunc("/api/sincronizar", vaciarCola)
-    mux.HandleFunc("/api/ordenar", recibirMensajeExterno)
-    mux.HandleFunc("/api/upload_modular", recibirFragmentoModular)
-    
-    // 2. Ruta de Salud (Crucial para que Render no tire 404)
-    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        w.WriteHeader(http.StatusOK)
-        w.Write([]byte("Córtex Buzón Online - Operativo"))
-    })
-
-    // 3. Ruta de Salida
-    mux.HandleFunc("/api/buzon/salida", func(w http.ResponseWriter, r *http.Request) {
-        mutex.Lock()
-        mensajes := cargarDeDisco()
-        mutex.Unlock()
+	// 1. Rutas del Buzón
+	// En el servidor del Buzón (Render)
+	// En main.go (Buzón)
+	mux.HandleFunc("/api/purga", func(w http.ResponseWriter, r *http.Request) {
+        mu.Lock() // Bloqueamos para evitar conflictos
+        mensajes = []MensajePendiente{} // Limpiamos memoria
+        guardarEnDisco(mensajes)        // ¡ESTO ES LO QUE TE FALTABA! Limpiamos el archivo físico
+        mu.Unlock()                     // Liberamos
+        
         w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(mensajes)
+        json.NewEncoder(w).Encode(map[string]string{"status": "buzon_limpio"})
+        log.Println("🧹 [BUZÓN]: Purga ejecutada y disco sincronizado.")
     })
+	mux.HandleFunc("/api/enviar", recibirMensajeExterno)
+	mux.HandleFunc("/api/sincronizar", vaciarCola)
+	mux.HandleFunc("/api/ordenar", recibirMensajeExterno)
+	mux.HandleFunc("/api/upload_modular", recibirFragmentoModular)
 
-    // Iniciar servidor
-    port := os.Getenv("PORT")
-    if port == "" {
-        port = "10000"
-    }
+	// 2. Ruta de Salud (Crucial para que Render no tire 404)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Córtex Buzón Online - Operativo"))
+	})
 
-    log.Printf("🚀 Córtex Buzón Online escuchando en :%s", port)
-    
-    // Escuchar en 0.0.0.0 es obligatorio en entornos cloud como Render
-    server := &http.Server{
-        Addr:    "0.0.0.0:" + port,
-        Handler: mux,
-    }
-    log.Fatal(server.ListenAndServe())
+	// 3. Ruta de Salida
+	mux.HandleFunc("/api/buzon/salida", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		mensajes := cargarDeDisco()
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mensajes)
+	})
+
+	// Iniciar servidor
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "10000"
+	}
+
+	log.Printf("🚀 Córtex Buzón Online escuchando en :%s", port)
+
+	// Escuchar en 0.0.0.0 es obligatorio en entornos cloud como Render
+	server := &http.Server{
+		Addr:    "0.0.0.0:" + port,
+		Handler: mux,
+	}
+	log.Fatal(server.ListenAndServe())
 }
 
 // Funciones auxiliares de persistencia
@@ -104,14 +119,14 @@ func recibirMensajeExterno(w http.ResponseWriter, r *http.Request) {
 	log.Printf("🔍 [DEBUG]: JSON decodificado -> ID: %d, Contenido: %.20s..., Tipo recibido: '%s'", m.ID, m.Mensaje, m.Tipo)
 	// --------------------------------------------------
 
-	mutex.Lock()
+	mu.Lock()
 	mensajes := cargarDeDisco()
 	m.Estado = "PENDING_DELIVERY"
 	m.CreatedAt = time.Now()
 	m.ID = len(mensajes) + 1
 	mensajes = append(mensajes, m)
 	guardarEnDisco(mensajes)
-	mutex.Unlock()
+	mu.Unlock()
 
 	// Lógica de Alineación Cognitiva
 	if m.Tipo == "MODULAR" {
@@ -124,8 +139,8 @@ func recibirMensajeExterno(w http.ResponseWriter, r *http.Request) {
 }
 
 func vaciarCola(w http.ResponseWriter, r *http.Request) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
 
 	mensajes := cargarDeDisco()
 
