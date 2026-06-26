@@ -35,59 +35,56 @@ var (
 func main() {
 	log.Println("🧬 MÉDULA LOCAL: Operando con persistencia en disco.")
 
-	// Crea un nuevo Mux en lugar de usar el default
+	// Crea un nuevo Mux
 	mux := http.NewServeMux()
 
-	// 1. Rutas del Buzón
-	// En el servidor del Buzón (Render)
-	// En main.go (Buzón)
-	mux.HandleFunc("/api/purga", func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()                       // Bloqueamos para evitar conflictos
-		mensajes = []MensajePendiente{} // Limpiamos memoria
-		guardarEnDisco(mensajes)        // ¡ESTO ES LO QUE TE FALTABA! Limpiamos el archivo físico
-		mu.Unlock()                     // Liberamos
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "buzon_limpio"})
-		log.Println("🧹 [BUZÓN]: Purga ejecutada y disco sincronizado.")
-	})
-	mux.HandleFunc("/api/enviar", recibirMensajeExterno)
-	mux.HandleFunc("/api/sincronizar", vaciarCola)
-	mux.HandleFunc("/api/ordenar", recibirMensajeExterno)
-	mux.HandleFunc("/api/upload_modular", recibirFragmentoModular)
-
-	// 2. Ruta de Salud (Crucial para que Render no tire 404)
+	// --- RUTAS DE SALUD ---
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Córtex Buzón Online - Operativo"))
 	})
 
-	// 3. Ruta de Salida
-	mux.HandleFunc("/api/buzon/salida", func(w http.ResponseWriter, r *http.Request) {
+	// --- RUTAS PROTEGIDAS POR CORS ---
+	
+	mux.HandleFunc("/api/purga", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		mensajes := cargarDeDisco()
-		mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mensajes)
-	})
-
-	mux.HandleFunc("/api/marcar_procesando", func(w http.ResponseWriter, r *http.Request) {
-		id, _ := strconv.Atoi(r.URL.Query().Get("id"))
-
-		mu.Lock()
-		mensajes := cargarDeDisco()
-		for i := range mensajes {
-			if mensajes[i].ID == id {
-				mensajes[i].Estado = "PROCESSING"
-				mensajes[i].UpdatedAt = time.Now()
-			}
-		}
+		mensajes = []MensajePendiente{}
 		guardarEnDisco(mensajes)
 		mu.Unlock()
-		w.WriteHeader(http.StatusOK)
-	})
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "buzon_limpio"})
+		log.Println("🧹 [BUZÓN]: Purga ejecutada.")
+	}))
 
-	// Iniciar servidor
+	mux.HandleFunc("/api/enviar", corsMiddleware(recibirMensajeExterno))
+	mux.HandleFunc("/api/sincronizar", corsMiddleware(vaciarCola))
+	mux.HandleFunc("/api/ordenar", corsMiddleware(recibirMensajeExterno))
+	mux.HandleFunc("/api/upload_modular", corsMiddleware(recibirFragmentoModular))
+
+	mux.HandleFunc("/api/buzon/salida", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		lista := cargarDeDisco()
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(lista)
+	}))
+
+	mux.HandleFunc("/api/marcar_procesando", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.Atoi(r.URL.Query().Get("id"))
+		mu.Lock()
+		lista := cargarDeDisco()
+		for i := range lista {
+			if lista[i].ID == id {
+				lista[i].Estado = "PROCESSING"
+				lista[i].UpdatedAt = time.Now()
+			}
+		}
+		guardarEnDisco(lista)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// --- INICIALIZACIÓN DE SERVIDOR ---
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "10000"
@@ -95,7 +92,6 @@ func main() {
 
 	log.Printf("🚀 Córtex Buzón Online escuchando en :%s", port)
 
-	// Escuchar en 0.0.0.0 es obligatorio en entornos cloud como Render
 	server := &http.Server{
 		Addr:    "0.0.0.0:" + port,
 		Handler: mux,
@@ -235,4 +231,18 @@ func recibirFragmentoModular(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Total-Recibido", fmt.Sprint(offset+n))
 	w.WriteHeader(http.StatusAccepted)
 
+}
+
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-ID-Tarea, X-Offset")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next(w, r)
+	}
 }
