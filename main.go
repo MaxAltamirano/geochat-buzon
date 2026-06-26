@@ -45,7 +45,7 @@ func main() {
 	})
 
 	// --- RUTAS PROTEGIDAS POR CORS ---
-	
+
 	mux.HandleFunc("/api/purga", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		mensajes = []MensajePendiente{}
@@ -84,6 +84,18 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	mux.HandleFunc("/api/cortex/ultimo-pulso", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		// Aquí defines la "frecuencia" o "vórtice" de tu sistema
+		data := map[string]interface{}{
+			"frecuencia": 432.169, // Valor base de tu SNC
+			"vortice":    0.0972,
+			"status":     "ONLINE",
+			"timestamp":  time.Now().Unix(),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(data)
+	}))
 	// --- INICIALIZACIÓN DE SERVIDOR ---
 	port := os.Getenv("PORT")
 	if port == "" {
