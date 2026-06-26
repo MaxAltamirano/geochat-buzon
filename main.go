@@ -14,23 +14,23 @@ import (
 )
 
 // Médula: Estructura de mensajes para el estado persistente
-
 type MensajePendiente struct {
 	ID        int       `json:"id"`
-	Mensaje   string    `json:"mensaje"` // Renombrado de Contenido a Mensaje para coincidir con Vue
-	Tipo      string    `json:"tipo"`    // "KIMI" o "USUARIO"
-	Estado    string    `json:"estado"`
+	Mensaje   string    `json:"mensaje"`
+	Tipo      string    `json:"tipo"`
+	Estado    string    `json:"estado"` // "PENDING", "PROCESSING", "DONE"
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"` // Para saber cuándo se bloqueó
 }
 
 const archivoPersistencia = "medula_local.json"
+
 // --- VARIABLES GLOBALES DE ESTADO ---
 var (
 	mensajes = []MensajePendiente{}
 	mu       sync.Mutex // Bloqueo para operaciones seguras
 
 )
-
 
 func main() {
 	log.Println("🧬 MÉDULA LOCAL: Operando con persistencia en disco.")
@@ -42,15 +42,15 @@ func main() {
 	// En el servidor del Buzón (Render)
 	// En main.go (Buzón)
 	mux.HandleFunc("/api/purga", func(w http.ResponseWriter, r *http.Request) {
-        mu.Lock() // Bloqueamos para evitar conflictos
-        mensajes = []MensajePendiente{} // Limpiamos memoria
-        guardarEnDisco(mensajes)        // ¡ESTO ES LO QUE TE FALTABA! Limpiamos el archivo físico
-        mu.Unlock()                     // Liberamos
-        
-        w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(map[string]string{"status": "buzon_limpio"})
-        log.Println("🧹 [BUZÓN]: Purga ejecutada y disco sincronizado.")
-    })
+		mu.Lock()                       // Bloqueamos para evitar conflictos
+		mensajes = []MensajePendiente{} // Limpiamos memoria
+		guardarEnDisco(mensajes)        // ¡ESTO ES LO QUE TE FALTABA! Limpiamos el archivo físico
+		mu.Unlock()                     // Liberamos
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "buzon_limpio"})
+		log.Println("🧹 [BUZÓN]: Purga ejecutada y disco sincronizado.")
+	})
 	mux.HandleFunc("/api/enviar", recibirMensajeExterno)
 	mux.HandleFunc("/api/sincronizar", vaciarCola)
 	mux.HandleFunc("/api/ordenar", recibirMensajeExterno)
@@ -69,6 +69,22 @@ func main() {
 		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(mensajes)
+	})
+
+	mux.HandleFunc("/api/marcar_procesando", func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.Atoi(r.URL.Query().Get("id"))
+
+		mu.Lock()
+		mensajes := cargarDeDisco()
+		for i := range mensajes {
+			if mensajes[i].ID == id {
+				mensajes[i].Estado = "PROCESSING"
+				mensajes[i].UpdatedAt = time.Now()
+			}
+		}
+		guardarEnDisco(mensajes)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
 	})
 
 	// Iniciar servidor
@@ -102,40 +118,77 @@ func cargarDeDisco() []MensajePendiente {
 }
 
 func guardarEnDisco(mensajes []MensajePendiente) {
-	datos, _ := json.Marshal(mensajes)
-	ioutil.WriteFile(archivoPersistencia, datos, 0644)
+	// 1. Serializamos los datos
+	datos, err := json.Marshal(mensajes)
+	if err != nil {
+		log.Printf("❌ [MÉDULA]: Error al marshalear datos: %v", err)
+		return
+	}
+
+	// 2. Creamos un archivo temporal en la misma carpeta que el destino
+	// El nombre .tmp nos asegura que no afectamos al archivo principal
+	tmpFile := archivoPersistencia + ".tmp"
+
+	// 3. Escribimos en el temporal
+	err = ioutil.WriteFile(tmpFile, datos, 0644)
+	if err != nil {
+		log.Printf("❌ [MÉDULA]: Error escribiendo archivo temporal: %v", err)
+		return
+	}
+
+	// 4. Renombramos el temporal al nombre original (Operación Atómica)
+	// Esto garantiza que el cambio sea instantáneo y seguro
+	err = os.Rename(tmpFile, archivoPersistencia)
+	if err != nil {
+		log.Printf("❌ [MÉDULA]: Error al realizar el rename atómico: %v", err)
+		// Intentamos limpiar el temporal si algo salió mal
+		os.Remove(tmpFile)
+		return
+	}
+
+	log.Println("💾 [MÉDULA]: Estado guardado de forma atómica.")
 }
 
 func recibirMensajeExterno(w http.ResponseWriter, r *http.Request) {
 	var m MensajePendiente
+	// 1. Decodificación segura
 	if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Printf("❌ [MÉDULA]: Error decodificando payload: %v", err)
 		return
 	}
 
-	// --- LOG DE DEPURACIÓN (Capa de Observabilidad) ---
-	// Esto nos dirá exactamente si el JSON llega con el campo "tipo" lleno o vacío
-	log.Printf("🔍 [DEBUG]: JSON decodificado -> ID: %d, Contenido: %.20s..., Tipo recibido: '%s'", m.ID, m.Mensaje, m.Tipo)
-	// --------------------------------------------------
+	// 2. Validación de Integridad (Soberanía de Datos)
+	if m.Mensaje == "" {
+		log.Printf("⚠️ [MÉDULA]: Intento de envío con mensaje vacío rechazado.")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
 
+	// 3. Persistencia Segura (Capa de Bloqueo)
 	mu.Lock()
 	mensajes := cargarDeDisco()
+
 	m.Estado = "PENDING_DELIVERY"
 	m.CreatedAt = time.Now()
-	m.ID = len(mensajes) + 1
+	m.ID = len(mensajes) + 1 // Asignación de ID basada en el estado actual
+
 	mensajes = append(mensajes, m)
 	guardarEnDisco(mensajes)
 	mu.Unlock()
 
-	// Lógica de Alineación Cognitiva
+	// 4. Log de Observabilidad
+	log.Printf("🔍 [DEBUG]: JSON decodificado -> ID: %d, Contenido: %.20s..., Tipo: '%s'", m.ID, m.Mensaje, m.Tipo)
+
+	// 5. Feedback de Alineación Cognitiva
 	if m.Tipo == "MODULAR" {
-		log.Printf("🏗️ [MÉDULA-NODO]: Estructura modular recibida (ID #%d). Preparando para compilación.", m.ID)
+		log.Printf("🏗️ [MÉDULA-NODO]: Estructura modular recibida (ID #%d). Preparando compilación.", m.ID)
 	} else {
-		log.Printf("💬 [MÉDULA-NODO]: Respuesta literal registrada (ID #%d). Tipo detectado: '%s'", m.ID, m.Tipo)
+		log.Printf("💬 [MÉDULA-NODO]: Respuesta literal registrada (ID #%d). Tipo: '%s'", m.ID, m.Tipo)
 	}
 
 	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte(fmt.Sprintf(`{"status":"success", "id":%d}`, m.ID)))
 }
 
 func vaciarCola(w http.ResponseWriter, r *http.Request) {
