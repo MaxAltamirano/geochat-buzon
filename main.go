@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"crypto/sha256"
+    "encoding/hex"
 )
 
 // Médula: Estructura de mensajes para el estado persistente
@@ -33,6 +35,15 @@ var (
 )
 
 func main() {
+
+	// 1. Asegurar la existencia de la carpeta de almacenamiento con permisos 0755
+    // 0755 significa: el dueño puede leer/escribir/ejecutar, el resto solo leer/ejecutar
+    err := os.MkdirAll("./storage", 0755)
+    if err != nil {
+        log.Fatalf("❌ [CRÍTICO]: No pude crear la carpeta ./storage: %v", err)
+    }
+    log.Println("📁 [SISTEMA]: Carpeta ./storage lista y con permisos asegurados.")
+
 	log.Println("🧬 MÉDULA LOCAL: Operando con persistencia en disco.")
 
 	// Crea un nuevo Mux
@@ -96,7 +107,12 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(data)
 	}))
-	// --- INICIALIZACIÓN DE SERVIDOR ---
+
+	mux.HandleFunc("/api/verificar-adn", corsMiddleware(verificarADN))
+	mux.HandleFunc("/api/ingestar-cromosomas", corsMiddleware(ingestarCromosomas))
+	
+
+	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "10000"
@@ -157,6 +173,31 @@ func guardarEnDisco(mensajes []MensajePendiente) {
 	log.Println("💾 [MÉDULA]: Estado guardado de forma atómica.")
 }
 
+// --- Funciones de Gestión de Hash para la Sincronía ---
+
+func calcularHash(adn string) string {
+    hash := sha256.Sum256([]byte(adn))
+    return hex.EncodeToString(hash[:])
+}
+
+// Para este ejemplo, guardaremos el hash en un archivo simple
+const archivoHash = "adn_hash.txt"
+
+func cargarHashDesdeDisco() string {
+    datos, err := ioutil.ReadFile(archivoHash)
+    if err != nil {
+        return "" // Si no existe, retorna vacío para forzar la primera inyección
+    }
+    return string(datos)
+}
+
+func guardarHash(hash string) {
+    err := ioutil.WriteFile(archivoHash, []byte(hash), 0644)
+    if err != nil {
+        log.Printf("❌ [MÉDULA]: Error guardando hash: %v", err)
+    }
+}
+
 func recibirMensajeExterno(w http.ResponseWriter, r *http.Request) {
 	var m MensajePendiente
 	// 1. Decodificación segura
@@ -211,6 +252,8 @@ func vaciarCola(w http.ResponseWriter, r *http.Request) {
 	// Limpiamos el archivo tras el handshake
 	guardarEnDisco([]MensajePendiente{})
 }
+
+
 func recibirFragmentoModular(w http.ResponseWriter, r *http.Request) {
 	// 1. Identificar quién envía y qué parte
 	idTarea := r.Header.Get("X-ID-Tarea")
@@ -245,6 +288,7 @@ func recibirFragmentoModular(w http.ResponseWriter, r *http.Request) {
 
 }
 
+
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -257,4 +301,73 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+// verificarADN procesa la huella digital del ADN recibido. 
+// Compara el hash del contenido actual con el registrado en el Buzón.
+func verificarADN(w http.ResponseWriter, r *http.Request) {
+	// 1. Decodificar el payload entrante
+	var payload struct {
+		ADN string `json:"dna_payload"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Printf("❌ [SYNC]: Error decodificando payload: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"status":"error", "message":"invalid_payload"}`))
+		return
+	}
+
+	// 2. Validación de Integridad (Uso de la función delegada)
+	// Si esNuevoADN es true, el hash cambió y se requiere reconfiguración.
+	if !verificarIntegridad(payload.ADN) {
+		log.Println("⚡ [SYNC]: ADN detectado como idéntico. Resonancia estable.")
+		
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"up_to_date"}`))
+		return
+	}
+
+	// 3. Si llegamos aquí, hubo una evolución en el ADN
+	log.Println("🧬 [SYNC]: Evolución de ADN detectada. Reiniciando Cortex...")
+
+	// --- Lógica de Reinyección ---
+	// Aquí disparas tu proceso de inyección de Kimi en la nube
+	// inyectarCromosomas(payload.ADN) 
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte(`{"status":"reconfiguring"}`))
+}
+
+
+// En tu código de Render (Buzón):
+func verificarIntegridad(adnNuevo string) bool {
+    nuevoHash := calcularHash(adnNuevo)
+    hashGuardado := cargarHashDesdeDisco() // O memoria
+
+    if nuevoHash == hashGuardado {
+        return false // Ya está sincronizado, no inyectar
+    }
+    guardarHash(nuevoHash)
+    return true // ADN cambiado, es necesaria la re-inyección
+}
+
+func ingestarCromosomas(w http.ResponseWriter, r *http.Request) {
+    var payload struct {
+        ADN     string `json:"adn"`
+        Trilogia string `json:"trilogia"`
+        Mapa     string `json:"mapa"`
+    }
+    json.NewDecoder(r.Body).Decode(&payload)
+
+    // Guardar en la carpeta local del contenedor de Render
+    os.WriteFile("adn_maestro.json", []byte(payload.ADN), 0644)
+    os.WriteFile("cromosoma_trilogia.json", []byte(payload.Trilogia), 0644)
+    os.WriteFile("mapa_cognitivo.json", []byte(payload.Mapa), 0644)
+
+    log.Println("📥 [CORTEX]: Cromosomas recibidos y persistidos en disco.")
+    w.WriteHeader(http.StatusOK)
 }
