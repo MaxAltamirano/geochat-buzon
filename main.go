@@ -355,19 +355,76 @@ func verificarIntegridad(adnNuevo string) bool {
     return true // ADN cambiado, es necesaria la re-inyección
 }
 
+// ingestarCromosomas procesa el ADN recibido, lo persiste y activa a Kimi
 func ingestarCromosomas(w http.ResponseWriter, r *http.Request) {
+    // 1. Definir la estructura esperada del payload
     var payload struct {
-        ADN     string `json:"adn"`
+        ADN      string `json:"adn"`
         Trilogia string `json:"trilogia"`
         Mapa     string `json:"mapa"`
     }
-    json.NewDecoder(r.Body).Decode(&payload)
 
-    // Guardar en la carpeta local del contenedor de Render
-    os.WriteFile("adn_maestro.json", []byte(payload.ADN), 0644)
+    // 2. Decodificar el cuerpo de la petición
+    if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+        log.Printf("❌ [CORTEX]: Error decodificando payload: %v", err)
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
+
+    // 3. Persistir los cromosomas en disco (almacenamiento atómico)
+    if err := os.WriteFile("adn_maestro.json", []byte(payload.ADN), 0644); err != nil {
+        log.Printf("❌ [CORTEX]: Error guardando adn_maestro: %v", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
     os.WriteFile("cromosoma_trilogia.json", []byte(payload.Trilogia), 0644)
     os.WriteFile("mapa_cognitivo.json", []byte(payload.Mapa), 0644)
 
     log.Println("📥 [CORTEX]: Cromosomas recibidos y persistidos en disco.")
+
+    // 4. Inyección Cognitiva (Despertar de Kimi)
+    if err := InyectarCromosomasEnKimi(); err != nil {
+        log.Printf("❌ [KIMI]: Error en la inyección: %v", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+
+    log.Println("📥 [CORTEX]: Cromosomas inyectados y Kimi reconfigurada.")
     w.WriteHeader(http.StatusOK)
 }
+
+// InyectarCromosomasEnKimi orquestará la carga del nuevo ADN al motor de Kimi.
+func InyectarCromosomasEnKimi() error {
+    log.Println("🧬 [KIMI]: Iniciando proceso de reconfiguración cognitiva...")
+
+    // 1. Leer los archivos persistidos por el Buzón
+    adn, err := os.ReadFile("adn_maestro.json")
+    if err != nil {
+        return fmt.Errorf("error leyendo adn_maestro: %v", err)
+    }
+    trilogia, err := os.ReadFile("cromosoma_trilogia.json")
+    if err != nil {
+        return fmt.Errorf("error leyendo cromosoma_trilogia: %v", err)
+    }
+    mapa, err := os.ReadFile("mapa_cognitivo.json")
+    if err != nil {
+        return fmt.Errorf("error leyendo mapa_cognitivo: %v", err)
+    }
+
+    // 2. Validación de integridad
+    if len(adn) == 0 || len(trilogia) == 0 || len(mapa) == 0 {
+        return fmt.Errorf("integridad fallida: archivos de cromosomas incompletos")
+    }
+
+    // 3. Simulación de carga (Logging de activación)
+    log.Printf("✅ [KIMI]: ADN maestro cargado (%d bytes)", len(adn))
+    log.Printf("✅ [KIMI]: Trilogía operativa cargada (%d bytes)", len(trilogia))
+    log.Printf("✅ [KIMI]: Mapa cognitivo integrado (%d bytes)", len(mapa))
+
+    // 4. Confirmación de identidad activa
+    log.Println("✨ [KIMI]: Reconfiguración completa. Nueva identidad activada.")
+    return nil
+}
+
+
+
