@@ -80,40 +80,36 @@ func main() {
 	mux.HandleFunc("/api/upload_modular", corsMiddleware(recibirFragmentoModular))
 
 	// Esta ruta unificada entrega lo que Kimi ha respondido y lo que el Buzón tiene listo
-	mux.HandleFunc("/api/buzon/salida", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	// Definimos la lógica del handler en una variable o función para poder envolverla
+
+	handlerSalida := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
 
-		// 1. Cargamos el estado actual
-		respuestas := cargarRespuestasKimi() // Retorna []RespuestaUnificada
-		pendientes := cargarDeDisco()        // Retorna []MensajePendiente
+		respuestas := cargarRespuestasKimi()
+		pendientes := cargarDeDisco()
 
-		// 2. Preparamos el payload unificado
-		// 'items' contiene el contexto de si es FRIEND o MODULAR para tu UI
 		data := map[string]interface{}{
 			"items":      respuestas,
 			"pendientes": pendientes,
 		}
 
-		// 3. Enviamos la respuesta
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(data); err != nil {
-			log.Printf("❌ [BUZÓN]: Error enviando payload de salida: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
+			log.Printf("❌ [BUZÓN]: Error enviando payload: %v", err)
 			return
 		}
 
-		// 4. Limpieza lógica (solo si hubo datos, mantenemos la integridad)
 		if len(respuestas) > 0 {
 			limpiarRespuestasKimi()
-			log.Println("✨ [KIMI]: Respuestas entregadas y cola limpiada.")
 		}
-
 		if len(pendientes) > 0 {
 			guardarEnDisco([]MensajePendiente{})
-			log.Println("🧹 [MÉDULA]: Cola de mensajes vaciada tras sincronía.")
 		}
-	}))
+	})
+
+	// Aplicamos el middleware aquí
+	mux.Handle("/api/buzon/salida", SovereignCORS(handlerSalida))
 
 	mux.HandleFunc("/api/marcar_procesando", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.Atoi(r.URL.Query().Get("id"))
@@ -159,6 +155,20 @@ func main() {
 		Handler: mux,
 	}
 	log.Fatal(server.ListenAndServe())
+}
+
+// Pon esto fuera de la función main()
+func SovereignCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Funciones auxiliares de persistencia
@@ -462,24 +472,24 @@ func InyectarCromosomasEnKimi() error {
 const archivoRespuestasKimi = "respuestas_kimi.json"
 
 func cargarRespuestasKimi() []RespuestaUnificada {
-    if _, err := os.Stat(archivoRespuestasKimi); os.IsNotExist(err) {
-        return []RespuestaUnificada{}
-    }
-    datos, err := ioutil.ReadFile(archivoRespuestasKimi)
-    if err != nil {
-        log.Printf("❌ [KIMI]: Error leyendo respuestas: %v", err)
-        return []RespuestaUnificada{}
-    }
-    var respuestas []RespuestaUnificada
-    json.Unmarshal(datos, &respuestas)
-    return respuestas
+	if _, err := os.Stat(archivoRespuestasKimi); os.IsNotExist(err) {
+		return []RespuestaUnificada{}
+	}
+	datos, err := ioutil.ReadFile(archivoRespuestasKimi)
+	if err != nil {
+		log.Printf("❌ [KIMI]: Error leyendo respuestas: %v", err)
+		return []RespuestaUnificada{}
+	}
+	var respuestas []RespuestaUnificada
+	json.Unmarshal(datos, &respuestas)
+	return respuestas
 }
 
 func limpiarRespuestasKimi() {
-    err := ioutil.WriteFile(archivoRespuestasKimi, []byte("[]"), 0644)
-    if err != nil {
-        log.Printf("❌ [KIMI]: Error limpiando respuestas: %v", err)
-    } else {
-        log.Println("✨ [KIMI]: Cola de respuestas vaciada tras entrega.")
-    }
+	err := ioutil.WriteFile(archivoRespuestasKimi, []byte("[]"), 0644)
+	if err != nil {
+		log.Printf("❌ [KIMI]: Error limpiando respuestas: %v", err)
+	} else {
+		log.Println("✨ [KIMI]: Cola de respuestas vaciada tras entrega.")
+	}
 }
