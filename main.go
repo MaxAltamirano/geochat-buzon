@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,8 +13,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	"crypto/sha256"
-    "encoding/hex"
 )
 
 // Médula: Estructura de mensajes para el estado persistente
@@ -23,6 +23,13 @@ type MensajePendiente struct {
 	Estado    string    `json:"estado"` // "PENDING", "PROCESSING", "DONE"
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"` // Para saber cuándo se bloqueó
+}
+
+type RespuestaUnificada struct {
+	Contexto  string                 `json:"contexto"` // "FRIEND" o "MODULAR"
+	Cuerpo    string                 `json:"cuerpo"`
+	Codigo    string                 `json:"codigo"`
+	Metadatos map[string]interface{} `json:"metadatos"`
 }
 
 const archivoPersistencia = "medula_local.json"
@@ -37,12 +44,12 @@ var (
 func main() {
 
 	// 1. Asegurar la existencia de la carpeta de almacenamiento con permisos 0755
-    // 0755 significa: el dueño puede leer/escribir/ejecutar, el resto solo leer/ejecutar
-    err := os.MkdirAll("./storage", 0755)
-    if err != nil {
-        log.Fatalf("❌ [CRÍTICO]: No pude crear la carpeta ./storage: %v", err)
-    }
-    log.Println("📁 [SISTEMA]: Carpeta ./storage lista y con permisos asegurados.")
+	// 0755 significa: el dueño puede leer/escribir/ejecutar, el resto solo leer/ejecutar
+	err := os.MkdirAll("./storage", 0755)
+	if err != nil {
+		log.Fatalf("❌ [CRÍTICO]: No pude crear la carpeta ./storage: %v", err)
+	}
+	log.Println("📁 [SISTEMA]: Carpeta ./storage lista y con permisos asegurados.")
 
 	log.Println("🧬 MÉDULA LOCAL: Operando con persistencia en disco.")
 
@@ -72,12 +79,40 @@ func main() {
 	mux.HandleFunc("/api/ordenar", corsMiddleware(recibirMensajeExterno))
 	mux.HandleFunc("/api/upload_modular", corsMiddleware(recibirFragmentoModular))
 
+	// Esta ruta unificada entrega lo que Kimi ha respondido y lo que el Buzón tiene listo
 	mux.HandleFunc("/api/buzon/salida", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		lista := cargarDeDisco()
-		mu.Unlock()
+		defer mu.Unlock()
+
+		// 1. Cargamos el estado actual
+		respuestas := cargarRespuestasKimi() // Retorna []RespuestaUnificada
+		pendientes := cargarDeDisco()        // Retorna []MensajePendiente
+
+		// 2. Preparamos el payload unificado
+		// 'items' contiene el contexto de si es FRIEND o MODULAR para tu UI
+		data := map[string]interface{}{
+			"items":      respuestas,
+			"pendientes": pendientes,
+		}
+
+		// 3. Enviamos la respuesta
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(lista)
+		if err := json.NewEncoder(w).Encode(data); err != nil {
+			log.Printf("❌ [BUZÓN]: Error enviando payload de salida: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// 4. Limpieza lógica (solo si hubo datos, mantenemos la integridad)
+		if len(respuestas) > 0 {
+			limpiarRespuestasKimi()
+			log.Println("✨ [KIMI]: Respuestas entregadas y cola limpiada.")
+		}
+
+		if len(pendientes) > 0 {
+			guardarEnDisco([]MensajePendiente{})
+			log.Println("🧹 [MÉDULA]: Cola de mensajes vaciada tras sincronía.")
+		}
 	}))
 
 	mux.HandleFunc("/api/marcar_procesando", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +145,6 @@ func main() {
 
 	mux.HandleFunc("/api/verificar-adn", corsMiddleware(verificarADN))
 	mux.HandleFunc("/api/ingestar-cromosomas", corsMiddleware(ingestarCromosomas))
-	
 
 	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
 	port := os.Getenv("PORT")
@@ -176,26 +210,26 @@ func guardarEnDisco(mensajes []MensajePendiente) {
 // --- Funciones de Gestión de Hash para la Sincronía ---
 
 func calcularHash(adn string) string {
-    hash := sha256.Sum256([]byte(adn))
-    return hex.EncodeToString(hash[:])
+	hash := sha256.Sum256([]byte(adn))
+	return hex.EncodeToString(hash[:])
 }
 
 // Para este ejemplo, guardaremos el hash en un archivo simple
 const archivoHash = "adn_hash.txt"
 
 func cargarHashDesdeDisco() string {
-    datos, err := ioutil.ReadFile(archivoHash)
-    if err != nil {
-        return "" // Si no existe, retorna vacío para forzar la primera inyección
-    }
-    return string(datos)
+	datos, err := ioutil.ReadFile(archivoHash)
+	if err != nil {
+		return "" // Si no existe, retorna vacío para forzar la primera inyección
+	}
+	return string(datos)
 }
 
 func guardarHash(hash string) {
-    err := ioutil.WriteFile(archivoHash, []byte(hash), 0644)
-    if err != nil {
-        log.Printf("❌ [MÉDULA]: Error guardando hash: %v", err)
-    }
+	err := ioutil.WriteFile(archivoHash, []byte(hash), 0644)
+	if err != nil {
+		log.Printf("❌ [MÉDULA]: Error guardando hash: %v", err)
+	}
 }
 
 func recibirMensajeExterno(w http.ResponseWriter, r *http.Request) {
@@ -253,7 +287,6 @@ func vaciarCola(w http.ResponseWriter, r *http.Request) {
 	guardarEnDisco([]MensajePendiente{})
 }
 
-
 func recibirFragmentoModular(w http.ResponseWriter, r *http.Request) {
 	// 1. Identificar quién envía y qué parte
 	idTarea := r.Header.Get("X-ID-Tarea")
@@ -288,7 +321,6 @@ func recibirFragmentoModular(w http.ResponseWriter, r *http.Request) {
 
 }
 
-
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -303,7 +335,7 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// verificarADN procesa la huella digital del ADN recibido. 
+// verificarADN procesa la huella digital del ADN recibido.
 // Compara el hash del contenido actual con el registrado en el Buzón.
 func verificarADN(w http.ResponseWriter, r *http.Request) {
 	// 1. Decodificar el payload entrante
@@ -323,7 +355,7 @@ func verificarADN(w http.ResponseWriter, r *http.Request) {
 	// Si esNuevoADN es true, el hash cambió y se requiere reconfiguración.
 	if !verificarIntegridad(payload.ADN) {
 		log.Println("⚡ [SYNC]: ADN detectado como idéntico. Resonancia estable.")
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"up_to_date"}`))
@@ -335,96 +367,119 @@ func verificarADN(w http.ResponseWriter, r *http.Request) {
 
 	// --- Lógica de Reinyección ---
 	// Aquí disparas tu proceso de inyección de Kimi en la nube
-	// inyectarCromosomas(payload.ADN) 
+	// inyectarCromosomas(payload.ADN)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte(`{"status":"reconfiguring"}`))
 }
 
-
 // En tu código de Render (Buzón):
 func verificarIntegridad(adnNuevo string) bool {
-    nuevoHash := calcularHash(adnNuevo)
-    hashGuardado := cargarHashDesdeDisco() // O memoria
+	nuevoHash := calcularHash(adnNuevo)
+	hashGuardado := cargarHashDesdeDisco() // O memoria
 
-    if nuevoHash == hashGuardado {
-        return false // Ya está sincronizado, no inyectar
-    }
-    guardarHash(nuevoHash)
-    return true // ADN cambiado, es necesaria la re-inyección
+	if nuevoHash == hashGuardado {
+		return false // Ya está sincronizado, no inyectar
+	}
+	guardarHash(nuevoHash)
+	return true // ADN cambiado, es necesaria la re-inyección
 }
 
 // ingestarCromosomas procesa el ADN recibido, lo persiste y activa a Kimi
 func ingestarCromosomas(w http.ResponseWriter, r *http.Request) {
-    // 1. Definir la estructura esperada del payload
-    var payload struct {
-        ADN      string `json:"adn"`
-        Trilogia string `json:"trilogia"`
-        Mapa     string `json:"mapa"`
-    }
+	// 1. Definir la estructura esperada del payload
+	var payload struct {
+		ADN      string `json:"adn"`
+		Trilogia string `json:"trilogia"`
+		Mapa     string `json:"mapa"`
+	}
 
-    // 2. Decodificar el cuerpo de la petición
-    if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-        log.Printf("❌ [CORTEX]: Error decodificando payload: %v", err)
-        w.WriteHeader(http.StatusBadRequest)
-        return
-    }
+	// 2. Decodificar el cuerpo de la petición
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Printf("❌ [CORTEX]: Error decodificando payload: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-    // 3. Persistir los cromosomas en disco (almacenamiento atómico)
-    if err := os.WriteFile("adn_maestro.json", []byte(payload.ADN), 0644); err != nil {
-        log.Printf("❌ [CORTEX]: Error guardando adn_maestro: %v", err)
-        w.WriteHeader(http.StatusInternalServerError)
-        return
-    }
-    os.WriteFile("cromosoma_trilogia.json", []byte(payload.Trilogia), 0644)
-    os.WriteFile("mapa_cognitivo.json", []byte(payload.Mapa), 0644)
+	// 3. Persistir los cromosomas en disco (almacenamiento atómico)
+	if err := os.WriteFile("adn_maestro.json", []byte(payload.ADN), 0644); err != nil {
+		log.Printf("❌ [CORTEX]: Error guardando adn_maestro: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	os.WriteFile("cromosoma_trilogia.json", []byte(payload.Trilogia), 0644)
+	os.WriteFile("mapa_cognitivo.json", []byte(payload.Mapa), 0644)
 
-    log.Println("📥 [CORTEX]: Cromosomas recibidos y persistidos en disco.")
+	log.Println("📥 [CORTEX]: Cromosomas recibidos y persistidos en disco.")
 
-    // 4. Inyección Cognitiva (Despertar de Kimi)
-    if err := InyectarCromosomasEnKimi(); err != nil {
-        log.Printf("❌ [KIMI]: Error en la inyección: %v", err)
-        w.WriteHeader(http.StatusInternalServerError)
-        return
-    }
+	// 4. Inyección Cognitiva (Despertar de Kimi)
+	if err := InyectarCromosomasEnKimi(); err != nil {
+		log.Printf("❌ [KIMI]: Error en la inyección: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-    log.Println("📥 [CORTEX]: Cromosomas inyectados y Kimi reconfigurada.")
-    w.WriteHeader(http.StatusOK)
+	log.Println("📥 [CORTEX]: Cromosomas inyectados y Kimi reconfigurada.")
+	w.WriteHeader(http.StatusOK)
 }
 
 // InyectarCromosomasEnKimi orquestará la carga del nuevo ADN al motor de Kimi.
 func InyectarCromosomasEnKimi() error {
-    log.Println("🧬 [KIMI]: Iniciando proceso de reconfiguración cognitiva...")
+	log.Println("🧬 [KIMI]: Iniciando proceso de reconfiguración cognitiva...")
 
-    // 1. Leer los archivos persistidos por el Buzón
-    adn, err := os.ReadFile("adn_maestro.json")
-    if err != nil {
-        return fmt.Errorf("error leyendo adn_maestro: %v", err)
-    }
-    trilogia, err := os.ReadFile("cromosoma_trilogia.json")
-    if err != nil {
-        return fmt.Errorf("error leyendo cromosoma_trilogia: %v", err)
-    }
-    mapa, err := os.ReadFile("mapa_cognitivo.json")
-    if err != nil {
-        return fmt.Errorf("error leyendo mapa_cognitivo: %v", err)
-    }
+	// 1. Leer los archivos persistidos por el Buzón
+	adn, err := os.ReadFile("adn_maestro.json")
+	if err != nil {
+		return fmt.Errorf("error leyendo adn_maestro: %v", err)
+	}
+	trilogia, err := os.ReadFile("cromosoma_trilogia.json")
+	if err != nil {
+		return fmt.Errorf("error leyendo cromosoma_trilogia: %v", err)
+	}
+	mapa, err := os.ReadFile("mapa_cognitivo.json")
+	if err != nil {
+		return fmt.Errorf("error leyendo mapa_cognitivo: %v", err)
+	}
 
-    // 2. Validación de integridad
-    if len(adn) == 0 || len(trilogia) == 0 || len(mapa) == 0 {
-        return fmt.Errorf("integridad fallida: archivos de cromosomas incompletos")
-    }
+	// 2. Validación de integridad
+	if len(adn) == 0 || len(trilogia) == 0 || len(mapa) == 0 {
+		return fmt.Errorf("integridad fallida: archivos de cromosomas incompletos")
+	}
 
-    // 3. Simulación de carga (Logging de activación)
-    log.Printf("✅ [KIMI]: ADN maestro cargado (%d bytes)", len(adn))
-    log.Printf("✅ [KIMI]: Trilogía operativa cargada (%d bytes)", len(trilogia))
-    log.Printf("✅ [KIMI]: Mapa cognitivo integrado (%d bytes)", len(mapa))
+	// 3. Simulación de carga (Logging de activación)
+	log.Printf("✅ [KIMI]: ADN maestro cargado (%d bytes)", len(adn))
+	log.Printf("✅ [KIMI]: Trilogía operativa cargada (%d bytes)", len(trilogia))
+	log.Printf("✅ [KIMI]: Mapa cognitivo integrado (%d bytes)", len(mapa))
 
-    // 4. Confirmación de identidad activa
-    log.Println("✨ [KIMI]: Reconfiguración completa. Nueva identidad activada.")
-    return nil
+	// 4. Confirmación de identidad activa
+	log.Println("✨ [KIMI]: Reconfiguración completa. Nueva identidad activada.")
+	return nil
 }
 
+// --- SECCIÓN DE PERSISTENCIA DE KIMI (Añadir esto al final de main.go) ---
 
+const archivoRespuestasKimi = "respuestas_kimi.json"
 
+func cargarRespuestasKimi() []RespuestaUnificada {
+    if _, err := os.Stat(archivoRespuestasKimi); os.IsNotExist(err) {
+        return []RespuestaUnificada{}
+    }
+    datos, err := ioutil.ReadFile(archivoRespuestasKimi)
+    if err != nil {
+        log.Printf("❌ [KIMI]: Error leyendo respuestas: %v", err)
+        return []RespuestaUnificada{}
+    }
+    var respuestas []RespuestaUnificada
+    json.Unmarshal(datos, &respuestas)
+    return respuestas
+}
+
+func limpiarRespuestasKimi() {
+    err := ioutil.WriteFile(archivoRespuestasKimi, []byte("[]"), 0644)
+    if err != nil {
+        log.Printf("❌ [KIMI]: Error limpiando respuestas: %v", err)
+    } else {
+        log.Println("✨ [KIMI]: Cola de respuestas vaciada tras entrega.")
+    }
+}
