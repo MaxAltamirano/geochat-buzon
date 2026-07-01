@@ -535,38 +535,63 @@ func cargarRespuestasKimi() []RespuestaUnificada {
 }
 
 func generarRespuestaKimi(mensajeID int, contenido string) {
-	// 1. Preparar la llamada a Ollama
-	payload := OllamaRequest{
-		Model:  "tojikontvru/kimi-k2.6:latest", 
-		Prompt: "Eres GeoChat, un organismo soberano. Responde a esto: " + contenido,
-		Stream: false,
+	log.Printf("🔥 [DEBUG]: Disparando Ollama para mensaje %d...", mensajeID)
+
+	// 1. Preparar la estructura de petición
+	payload := map[string]interface{}{
+		"model":  "tojikontvru/kimi-k2.6:latest",
+		"prompt": "Eres GeoChat, un organismo soberano. Responde a esto: " + contenido,
+		"stream": false,
 	}
-	datos, _ := json.Marshal(payload)
+	datos, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("❌ [KIMI-ERROR]: Error al codificar JSON: %v", err)
+		return
+	}
 
 	// 2. Enviar petición a Ollama local
 	resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewBuffer(datos))
 	if err != nil {
-		log.Printf("❌ [KIMI]: Ollama no responde: %v", err)
+		log.Printf("❌ [KIMI-ERROR]: Ollama rechazó la conexión: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
-	var ollamaResp OllamaResponse
-	json.Unmarshal(body, &ollamaResp)
+	// 3. Leer y decodificar la respuesta
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("❌ [KIMI-ERROR]: Error leyendo respuesta de Ollama: %v", err)
+		return
+	}
 
-	// 3. Guardar la respuesta REAL en el JSON
+	var ollamaResp struct {
+		Response string `json:"response"`
+	}
+	if err := json.Unmarshal(body, &ollamaResp); err != nil {
+		log.Printf("❌ [KIMI-ERROR]: Error al parsear respuesta de Ollama: %v", err)
+		return
+	}
+
+	// 4. Guardar la respuesta REAL en el JSON
 	mu.Lock()
 	defer mu.Unlock()
+
 	respuestas := cargarRespuestasKimi()
 	nueva := RespuestaUnificada{
 		ID:        mensajeID,
 		Respuesta: ollamaResp.Response,
 		Timestamp: time.Now(),
+		Contexto:  "FRIEND",
+		Cuerpo:    contenido,
 	}
 	respuestas = append(respuestas, nueva)
-	
-	finalData, _ := json.Marshal(respuestas)
-	os.WriteFile(archivoRespuestasKimi, finalData, 0644)
-	log.Printf("✨ [KIMI]: Respuesta de IA generada para mensaje #%d", mensajeID)
+
+	finalData, _ := json.MarshalIndent(respuestas, "", "  ")
+	err = os.WriteFile(archivoRespuestasKimi, finalData, 0644)
+	if err != nil {
+		log.Printf("❌ [KIMI-ERROR]: No se pudo escribir en el archivo: %v", err)
+		return
+	}
+
+	log.Printf("✅ [KIMI]: Respuesta de la IA integrada exitosamente para mensaje #%d", mensajeID)
 }
