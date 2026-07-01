@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,7 +14,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	"bytes"
 )
 
 // Médula: Estructura de mensajes para el estado persistente
@@ -36,7 +36,6 @@ type RespuestaUnificada struct {
 	Timestamp time.Time              `json:"timestamp"`
 }
 
-
 // Estructura para hablar con Ollama
 type OllamaRequest struct {
 	Model  string `json:"model"`
@@ -47,6 +46,7 @@ type OllamaRequest struct {
 type OllamaResponse struct {
 	Response string `json:"response"`
 }
+
 const archivoPersistencia = "medula_local.json"
 
 // --- VARIABLES GLOBALES DE ESTADO ---
@@ -551,9 +551,8 @@ func generarRespuestaKimi(mensajeID int, contenido string) {
 	}
 	datos, _ := json.Marshal(payload)
 
-	// 3. ENVIAR CON TIMEOUT: Si Ollama tarda más de 15s, cancelamos para no congelar el nodo
 	client := &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout: 60 * time.Second,
 	}
 
 	resp, err := client.Post("http://localhost:11434/api/generate", "application/json", bytes.NewBuffer(datos))
