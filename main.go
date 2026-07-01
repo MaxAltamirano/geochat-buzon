@@ -535,29 +535,35 @@ func cargarRespuestasKimi() []RespuestaUnificada {
 }
 
 func generarRespuestaKimi(mensajeID int, contenido string) {
-	log.Printf("🔥 [DEBUG]: Disparando Ollama para mensaje %d...", mensajeID)
-
-	// 1. Preparar la estructura de petición
-	payload := map[string]interface{}{
-		"model":  "tojikontvru/kimi-k2.6:latest",
-		"prompt": "Eres GeoChat, un organismo soberano. Responde a esto: " + contenido,
-		"stream": false,
-	}
-	datos, err := json.Marshal(payload)
-	if err != nil {
-		log.Printf("❌ [KIMI-ERROR]: Error al codificar JSON: %v", err)
+	// 1. PROTECTOR DE ENTORNO: Si estamos en la nube, no intentamos llamar a Ollama local.
+	if os.Getenv("RENDER") != "" {
+		log.Printf("☁️ [NODO]: Nube detectada. Delegando IA a Nodo Avellaneda...")
 		return
 	}
 
-	// 2. Enviar petición a Ollama local
-	resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewBuffer(datos))
+	log.Printf("🔥 [DEBUG]: Disparando Ollama local para mensaje %d...", mensajeID)
+
+	// 2. Preparar payload
+	payload := map[string]interface{}{
+		"model":  "gemma2:2b", // Modelo ligero para evitar colapso de RAM
+		"prompt": "Eres GeoChat, un organismo soberano. Responde a esto: " + contenido,
+		"stream": false,
+	}
+	datos, _ := json.Marshal(payload)
+
+	// 3. ENVIAR CON TIMEOUT: Si Ollama tarda más de 15s, cancelamos para no congelar el nodo
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+	}
+
+	resp, err := client.Post("http://localhost:11434/api/generate", "application/json", bytes.NewBuffer(datos))
 	if err != nil {
-		log.Printf("❌ [KIMI-ERROR]: Ollama rechazó la conexión: %v", err)
+		log.Printf("❌ [KIMI-ERROR]: Ollama rechazó la conexión o Timeout: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	// 3. Leer y decodificar la respuesta
+	// 4. Leer y decodificar
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("❌ [KIMI-ERROR]: Error leyendo respuesta de Ollama: %v", err)
@@ -568,11 +574,11 @@ func generarRespuestaKimi(mensajeID int, contenido string) {
 		Response string `json:"response"`
 	}
 	if err := json.Unmarshal(body, &ollamaResp); err != nil {
-		log.Printf("❌ [KIMI-ERROR]: Error al parsear respuesta de Ollama: %v", err)
+		log.Printf("❌ [KIMI-ERROR]: Error al parsear respuesta: %v", err)
 		return
 	}
 
-	// 4. Guardar la respuesta REAL en el JSON
+	// 5. Guardar persistencia
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -587,11 +593,7 @@ func generarRespuestaKimi(mensajeID int, contenido string) {
 	respuestas = append(respuestas, nueva)
 
 	finalData, _ := json.MarshalIndent(respuestas, "", "  ")
-	err = os.WriteFile(archivoRespuestasKimi, finalData, 0644)
-	if err != nil {
-		log.Printf("❌ [KIMI-ERROR]: No se pudo escribir en el archivo: %v", err)
-		return
-	}
+	os.WriteFile(archivoRespuestasKimi, finalData, 0644)
 
 	log.Printf("✅ [KIMI]: Respuesta de la IA integrada exitosamente para mensaje #%d", mensajeID)
 }
