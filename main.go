@@ -30,6 +30,9 @@ type RespuestaUnificada struct {
 	Cuerpo    string                 `json:"cuerpo"`
 	Codigo    string                 `json:"codigo"`
 	Metadatos map[string]interface{} `json:"metadatos"`
+	ID        int                    `json:"id"`
+	Respuesta string                 `json:"respuesta"`
+	Timestamp time.Time              `json:"timestamp"`
 }
 
 const archivoPersistencia = "medula_local.json"
@@ -101,10 +104,10 @@ func main() {
 		}
 
 		if len(respuestas) > 0 {
-			limpiarRespuestasKimi()
+			//limpiarRespuestasKimi()
 		}
 		if len(pendientes) > 0 {
-			guardarEnDisco([]MensajePendiente{})
+			//guardarEnDisco([]MensajePendiente{})
 		}
 	})
 
@@ -112,18 +115,53 @@ func main() {
 	mux.Handle("/api/buzon/salida", SovereignCORS(handlerSalida))
 
 	mux.HandleFunc("/api/marcar_procesando", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		id, _ := strconv.Atoi(r.URL.Query().Get("id"))
+		// 1. Obtención y validación del ID
+		idStr := r.URL.Query().Get("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			log.Printf("❌ [MÉDULA]: ID inválido recibido: %s", idStr)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		mu.Lock()
 		lista := cargarDeDisco()
+		mensajeContenido := ""
+		encontrado := false
+
+		// 2. Actualización de estado en la Médula
 		for i := range lista {
 			if lista[i].ID == id {
 				lista[i].Estado = "PROCESSING"
 				lista[i].UpdatedAt = time.Now()
+				mensajeContenido = lista[i].Mensaje
+				encontrado = true
+				break // Salimos del bucle al encontrarlo
 			}
 		}
+
+		if !encontrado {
+			mu.Unlock()
+			log.Printf("⚠️ [MÉDULA]: Intento de procesar ID inexistente #%d", id)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		// 3. Persistimos el cambio antes de liberar el lock
 		guardarEnDisco(lista)
 		mu.Unlock()
-		w.WriteHeader(http.StatusOK)
+
+		// 4. Disparo del puente cognitivo
+		// Ejecutamos esto fuera del lock para no bloquear el servidor mientras Kimi trabaja
+		go func(id int, contenido string) {
+			log.Printf("🚀 [CORTEX]: Iniciando procesamiento automático para ID #%d", id)
+			generarRespuestaKimi(id, contenido)
+		}(id, mensajeContenido)
+
+		// 5. Respuesta inmediata al cliente
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(fmt.Sprintf(`{"status":"success", "message":"Procesando ID %d"}`, id)))
 	}))
 
 	mux.HandleFunc("/api/cortex/ultimo-pulso", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -468,7 +506,6 @@ func InyectarCromosomasEnKimi() error {
 }
 
 // --- SECCIÓN DE PERSISTENCIA DE KIMI (Añadir esto al final de main.go) ---
-
 const archivoRespuestasKimi = "respuestas_kimi.json"
 
 func cargarRespuestasKimi() []RespuestaUnificada {
@@ -485,11 +522,21 @@ func cargarRespuestasKimi() []RespuestaUnificada {
 	return respuestas
 }
 
-func limpiarRespuestasKimi() {
-	err := ioutil.WriteFile(archivoRespuestasKimi, []byte("[]"), 0644)
-	if err != nil {
-		log.Printf("❌ [KIMI]: Error limpiando respuestas: %v", err)
-	} else {
-		log.Println("✨ [KIMI]: Cola de respuestas vaciada tras entrega.")
+func generarRespuestaKimi(mensajeID int, contenido string) {
+	// 1. Crear la estructura de respuesta
+	nuevaRespuesta := RespuestaUnificada{
+		ID:        mensajeID,
+		Respuesta: "Kimi procesando: " + contenido,
+		Timestamp: time.Now(),
 	}
+
+	// 2. Leer, actualizar y guardar en respuestas_kimi.json
+	mu.Lock()
+	defer mu.Unlock()
+	respuestas := cargarRespuestasKimi()
+	respuestas = append(respuestas, nuevaRespuesta)
+
+	datos, _ := json.Marshal(respuestas)
+	os.WriteFile(archivoRespuestasKimi, datos, 0644)
+	log.Printf("✨ [KIMI]: Respuesta generada para el mensaje #%d", mensajeID)
 }
