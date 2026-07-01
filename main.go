@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"bytes"
 )
 
 // Médula: Estructura de mensajes para el estado persistente
@@ -35,6 +36,17 @@ type RespuestaUnificada struct {
 	Timestamp time.Time              `json:"timestamp"`
 }
 
+
+// Estructura para hablar con Ollama
+type OllamaRequest struct {
+	Model  string `json:"model"`
+	Prompt string `json:"prompt"`
+	Stream bool   `json:"stream"`
+}
+
+type OllamaResponse struct {
+	Response string `json:"response"`
+}
 const archivoPersistencia = "medula_local.json"
 
 // --- VARIABLES GLOBALES DE ESTADO ---
@@ -523,20 +535,38 @@ func cargarRespuestasKimi() []RespuestaUnificada {
 }
 
 func generarRespuestaKimi(mensajeID int, contenido string) {
-	// 1. Crear la estructura de respuesta
-	nuevaRespuesta := RespuestaUnificada{
-		ID:        mensajeID,
-		Respuesta: "Kimi procesando: " + contenido,
-		Timestamp: time.Now(),
+	// 1. Preparar la llamada a Ollama
+	payload := OllamaRequest{
+		Model:  "tojikontvru/kimi-k2.6:latest", 
+		Prompt: "Eres GeoChat, un organismo soberano. Responde a esto: " + contenido,
+		Stream: false,
 	}
+	datos, _ := json.Marshal(payload)
 
-	// 2. Leer, actualizar y guardar en respuestas_kimi.json
+	// 2. Enviar petición a Ollama local
+	resp, err := http.Post("http://localhost:11434/api/generate", "application/json", bytes.NewBuffer(datos))
+	if err != nil {
+		log.Printf("❌ [KIMI]: Ollama no responde: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+	var ollamaResp OllamaResponse
+	json.Unmarshal(body, &ollamaResp)
+
+	// 3. Guardar la respuesta REAL en el JSON
 	mu.Lock()
 	defer mu.Unlock()
 	respuestas := cargarRespuestasKimi()
-	respuestas = append(respuestas, nuevaRespuesta)
-
-	datos, _ := json.Marshal(respuestas)
-	os.WriteFile(archivoRespuestasKimi, datos, 0644)
-	log.Printf("✨ [KIMI]: Respuesta generada para el mensaje #%d", mensajeID)
+	nueva := RespuestaUnificada{
+		ID:        mensajeID,
+		Respuesta: ollamaResp.Response,
+		Timestamp: time.Now(),
+	}
+	respuestas = append(respuestas, nueva)
+	
+	finalData, _ := json.Marshal(respuestas)
+	os.WriteFile(archivoRespuestasKimi, finalData, 0644)
+	log.Printf("✨ [KIMI]: Respuesta de IA generada para mensaje #%d", mensajeID)
 }
