@@ -8,3 +8,6 @@ main
 .git/
 go.sum
 index.html
+*.json
+buzon_server
+geochat-buzon
