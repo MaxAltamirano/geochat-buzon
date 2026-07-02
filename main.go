@@ -16,6 +16,12 @@ import (
 	"time"
 )
 
+// --- ESTRUCTURA PARA EL BYPASS SOBERANO ---
+type Mensaje struct {
+	Entidad string `json:"entidad"`
+	Mensaje string `json:"mensaje"`
+}
+
 // Médula: Estructura de mensajes para el estado persistente
 type MensajePendiente struct {
 	ID        int       `json:"id"`
@@ -111,9 +117,9 @@ func main() {
 
 		// 3. Empaquetamos todo con un identificador de origen
 		data := map[string]interface{}{
-			"items":      respuestas,
+			"items":      respuestas, // Aquí se inyecta lo que Kimi envía al Buzón
 			"pendientes": pendientes,
-			"source":     "nativa_local_linux", // Identificador de soberanía de datos
+			"source":     "nativa_local_linux",
 			"ts":         time.Now().Format(time.RFC3339),
 		}
 
@@ -198,6 +204,21 @@ func main() {
 	mux.HandleFunc("/api/verificar-adn", corsMiddleware(verificarADN))
 	mux.HandleFunc("/api/ingestar-cromosomas", corsMiddleware(ingestarCromosomas))
 
+	// --- RUTA DE INYECCIÓN DE KIMI (EL BYPASS SOBERANO) ---
+	mux.HandleFunc("/api/buzon/entrada", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		var m Mensaje
+		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
+			http.Error(w, "Error decodificando inyección", http.StatusBadRequest)
+			return
+		}
+
+		// Llamamos a la función que guarda la respuesta de Kimi en la Médula
+		agregarAlHistorial(m)
+
+		w.WriteHeader(http.StatusAccepted)
+		log.Printf("📥 [BUZÓN]: Inyección recibida de %s", m.Entidad)
+	}))
+
 	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -211,6 +232,30 @@ func main() {
 		Handler: mux,
 	}
 	log.Fatal(server.ListenAndServe())
+}
+
+func agregarAlHistorial(nuevoMensaje Mensaje) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	// 1. Cargamos las respuestas actuales
+	respuestas := cargarRespuestasKimi()
+
+	// 2. Creamos la estructura unificada
+	nueva := RespuestaUnificada{
+		ID:        len(respuestas) + 1,
+		Respuesta: nuevoMensaje.Mensaje,
+		Timestamp: time.Now(),
+		Contexto:  "FRIEND",
+		Cuerpo:    "Procesado por Kimi Local",
+	}
+
+	// 3. Persistimos
+	respuestas = append(respuestas, nueva)
+	finalData, _ := json.MarshalIndent(respuestas, "", "  ")
+	os.WriteFile(archivoRespuestasKimi, finalData, 0644)
+
+	log.Printf("✅ [BUZÓN]: Respuesta de Kimi persistida en el historial.")
 }
 
 // Pon esto fuera de la función main()
@@ -526,13 +571,13 @@ func InyectarCromosomasEnKimi() error {
 // --- SECCIÓN DE PERSISTENCIA DE KIMI (Añadir esto al final de main.go) ---
 const archivoRespuestasKimi = "respuestas_kimi.json"
 
+// Necesitamos esta función para cargar el estado previo
 func cargarRespuestasKimi() []RespuestaUnificada {
 	if _, err := os.Stat(archivoRespuestasKimi); os.IsNotExist(err) {
 		return []RespuestaUnificada{}
 	}
 	datos, err := ioutil.ReadFile(archivoRespuestasKimi)
 	if err != nil {
-		log.Printf("❌ [KIMI]: Error leyendo respuestas: %v", err)
 		return []RespuestaUnificada{}
 	}
 	var respuestas []RespuestaUnificada
@@ -540,21 +585,25 @@ func cargarRespuestasKimi() []RespuestaUnificada {
 	return respuestas
 }
 
-
 func generarRespuestaKimi(mensajeID int, contenido string) {
-	// 1. PROTECTOR DE ENTORNO Y DELEGACIÓN
-	if os.Getenv("RENDER") != "" {
-		log.Printf("☁️ [NODO]: Nube detectada. Delegando IA al Nodo Avellaneda...")
-		go delegarAIAlNodoLocal(mensajeID, contenido)
-		return
+	log.Printf("🧠 [CORTEX]: Activando Kimi para ID #%d...", mensajeID)
+
+	// 1. LECTURA SOBERANA: Leemos el ADN del disco
+	adn, err := os.ReadFile("adn_maestro.json")
+	contextoADN := "ADN_NO_CARGADO"
+	if err == nil {
+		contextoADN = string(adn)
+	} else {
+		log.Printf("⚠️ [CORTEX]: ADN no encontrado: %v", err)
 	}
 
-	// 2. EJECUCIÓN LOCAL (Solo si NO es Render)
+	// 2. MODO LOCAL: Disparo directo a Ollama (Phi-3)
+	// Nota: Al ser ejecución local, no necesitamos el bloque IF RENDER.
 	log.Printf("🔥 [DEBUG]: Disparando Ollama local para mensaje %d...", mensajeID)
 
 	payload := map[string]interface{}{
 		"model":  "phi3:mini",
-		"prompt": "[CROMOSOMA GEOCHAT - ADN 37] Eres un organismo soberano. Tu estructura se basa en Proteínas A, T, G y C. Responde a esto con tu lógica sistémica: " + contenido,
+		"prompt": "[CROMOSOMA GEOCHAT - ADN 37]\nContexto ADN: " + contextoADN + "\n\nPregunta: " + contenido,
 		"stream": false,
 	}
 	datos, _ := json.Marshal(payload)
@@ -572,46 +621,65 @@ func generarRespuestaKimi(mensajeID int, contenido string) {
 		Response string `json:"response"`
 	}
 	json.Unmarshal(body, &ollamaResp)
+	respuestaFinal := ollamaResp.Response
 
-	// 3. PERSISTENCIA
+	// 3. PERSISTENCIA Y PUSH AL BUZÓN
 	mu.Lock()
-	defer mu.Unlock()
-
-	respuestas := cargarRespuestasKimi()
 	nueva := RespuestaUnificada{
 		ID:        mensajeID,
-		Respuesta: ollamaResp.Response,
+		Respuesta: respuestaFinal,
 		Timestamp: time.Now(),
 		Contexto:  "FRIEND",
 		Cuerpo:    contenido,
 	}
-	respuestas = append(respuestas, nueva)
 
+	// A. Persistencia local en el Linux Lab
+	respuestas := cargarRespuestasKimi()
+	respuestas = append(respuestas, nueva)
 	finalData, _ := json.MarshalIndent(respuestas, "", "  ")
 	os.WriteFile(archivoRespuestasKimi, finalData, 0644)
+	mu.Unlock()
 
-	log.Printf("✅ [KIMI]: Respuesta integrada para mensaje #%d", mensajeID)
+	// B. 🔥 AQUÍ CERRAMOS EL CICLO: Bypass Soberano al Buzón
+	// Esto es lo que permite que tu Frontend vea la respuesta sin preguntar al local
+	GuardarEnBuzon(Mensaje{
+		Entidad: "KIMI",
+		Mensaje: respuestaFinal,
+	})
+
+	log.Printf("✅ [KIMI]: Respuesta integrada y enviada al Buzón para mensaje #%d", mensajeID)
 }
 
-func delegarAIAlNodoLocal(mensajeID int, contenido string) {
-	// 1. Define la URL a la que quieres enviar el mensaje
-	// NOTA: Asegúrate de que esta URL sea accesible desde la nube hacia tu Nodo (ej. túnel)
-	url := "http://tu-dominio-o-tunel.com/api/cortex/enviar-mensaje" 
+func GuardarEnBuzon(nuevoMensaje Mensaje) error {
+	mu.Lock()
+	defer mu.Unlock()
 
-	payload := map[string]interface{}{
-		"id":      mensajeID,
-		"mensaje": contenido,
+	// 1. Cargamos el estado actual (la médula)
+	respuestas := cargarRespuestasKimi()
+
+	// 2. Creamos la nueva unidad de memoria
+	nueva := RespuestaUnificada{
+		ID:        len(respuestas) + 1,
+		Respuesta: nuevoMensaje.Mensaje,
+		Timestamp: time.Now(),
+		Contexto:  nuevoMensaje.Entidad,
 	}
-	datos, _ := json.Marshal(payload)
-	
-	// 2. Corregimos el http.Post con los 3 argumentos obligatorios
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(datos))
-	
+
+	// 3. Persistimos la nueva estructura
+	respuestas = append(respuestas, nueva)
+	finalData, err := json.MarshalIndent(respuestas, "", "  ")
 	if err != nil {
-		log.Printf("❌ [DELEGACIÓN]: Fallo al contactar Nodo Avellaneda: %v", err)
-		return
+		log.Printf("❌ [BUZÓN-ERROR]: Fallo al serializar médula: %v", err)
+		return err
 	}
-	defer resp.Body.Close()
-	
-	log.Printf("🚀 [DELEGACIÓN]: Mensaje #%d enviado al Nodo Avellaneda exitosamente.", mensajeID)
+
+	// 4. Escritura atómica
+	err = os.WriteFile(archivoRespuestasKimi, finalData, 0644)
+	if err != nil {
+		log.Printf("❌ [BUZÓN-ERROR]: Fallo al escribir en disco: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [BUZÓN-RENDER]: Respuesta de %s inyectada en médula (ID: %d).", nuevoMensaje.Entidad, nueva.ID)
+	return nil
 }
