@@ -105,33 +105,40 @@ func main() {
 
 	// handlerSalida unifica la lectura de respuestas locales y pendientes
 	// Esta función debe sustituir a la que tenías en main.go
+
 	var handlerSalida = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
 
-		// 1. Siempre cargamos lo que Kimi ya procesó en nuestro disco local (Linux)
+		// 1. Cargar las respuestas desde el origen persistente
+		// ASEGÚRATE que dentro de cargarRespuestasKimi() la ruta sea "./storage/respuestas_kimi.json"
 		respuestas := cargarRespuestasKimi()
 
-		// 2. Cargamos lo que está en cola esperando ser procesado (Médula)
+		// DEBUG: Verificación en los logs del servidor para confirmar que hay datos
+		log.Printf("DEBUG [BUZÓN]: Leyendo respuestas... cantidad encontrada: %d", len(respuestas))
+
+		// 2. Cargar lo pendiente
 		pendientes := cargarDeDisco()
 
-		// 3. Empaquetamos todo con un identificador de origen
+		// 3. Empaquetar datos para el Frontend
 		data := map[string]interface{}{
-			"items":      respuestas, // Aquí se inyecta lo que Kimi envía al Buzón
+			"items":      respuestas,
 			"pendientes": pendientes,
 			"source":     "nativa_local_linux",
 			"ts":         time.Now().Format(time.RFC3339),
 		}
 
+		// 4. Configurar respuesta
 		w.Header().Set("Content-Type", "application/json")
 
-		// 4. Si hay error, logueamos pero intentamos responder igual
+		// 5. Codificar y enviar
 		if err := json.NewEncoder(w).Encode(data); err != nil {
 			log.Printf("❌ [BUZÓN]: Error crítico al serializar respuesta: %v", err)
 			http.Error(w, "Error interno de persistencia", http.StatusInternalServerError)
 			return
 		}
 
+		// 6. Confirmación de entrega
 		log.Printf("📡 [BUZÓN]: Salida entregada. Items: %d, Pendientes: %d", len(respuestas), len(pendientes))
 	})
 
@@ -234,28 +241,27 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
-func agregarAlHistorial(nuevoMensaje Mensaje) {
-	mu.Lock()
-	defer mu.Unlock()
+func agregarAlHistorial(m Mensaje) {
+    mu.Lock()
+    defer mu.Unlock()
 
-	// 1. Cargamos las respuestas actuales
-	respuestas := cargarRespuestasKimi()
+    // 1. Cargamos lo que hay
+    respuestas := cargarRespuestasKimi()
 
-	// 2. Creamos la estructura unificada
-	nueva := RespuestaUnificada{
-		ID:        len(respuestas) + 1,
-		Respuesta: nuevoMensaje.Mensaje,
-		Timestamp: time.Now(),
-		Contexto:  "FRIEND",
-		Cuerpo:    "Procesado por Kimi Local",
-	}
+    // 2. Creamos la nueva entrada
+    nueva := RespuestaUnificada{
+        Contexto:  m.Entidad,
+        Cuerpo:    m.Mensaje,
+        Timestamp: time.Now(),
+    }
+    respuestas = append(respuestas, nueva)
 
-	// 3. Persistimos
-	respuestas = append(respuestas, nueva)
-	finalData, _ := json.MarshalIndent(respuestas, "", "  ")
-	os.WriteFile(archivoRespuestasKimi, finalData, 0644)
-
-	log.Printf("✅ [BUZÓN]: Respuesta de Kimi persistida en el historial.")
+    // 3. Guardamos en el archivo persistente
+    datos, _ := json.MarshalIndent(respuestas, "", "  ")
+    err := os.WriteFile(archivoRespuestasKimi, datos, 0644)
+    if err != nil {
+        log.Printf("❌ [BUZÓN]: Error crítico al persistir en disco: %v", err)
+    }
 }
 
 // Pon esto fuera de la función main()
@@ -569,20 +575,32 @@ func InyectarCromosomasEnKimi() error {
 }
 
 // --- SECCIÓN DE PERSISTENCIA DE KIMI (Añadir esto al final de main.go) ---
-const archivoRespuestasKimi = "respuestas_kimi.json"
+//const archivoRespuestasKimi = "respuestas_kimi.json"
+const  archivoRespuestasKimi = "./storage/respuestas_kimi.json"
 
 // Necesitamos esta función para cargar el estado previo
 func cargarRespuestasKimi() []RespuestaUnificada {
-	if _, err := os.Stat(archivoRespuestasKimi); os.IsNotExist(err) {
-		return []RespuestaUnificada{}
-	}
-	datos, err := ioutil.ReadFile(archivoRespuestasKimi)
-	if err != nil {
-		return []RespuestaUnificada{}
-	}
-	var respuestas []RespuestaUnificada
-	json.Unmarshal(datos, &respuestas)
-	return respuestas
+    // 1. Verificamos existencia
+    if _, err := os.Stat(archivoRespuestasKimi); os.IsNotExist(err) {
+        log.Printf("⚠️ [BUZÓN]: Archivo de respuestas no existe en %s, iniciando nuevo historial.", archivoRespuestasKimi)
+        return []RespuestaUnificada{}
+    }
+
+    // 2. Leemos el archivo
+    datos, err := os.ReadFile(archivoRespuestasKimi)
+    if err != nil {
+        log.Printf("❌ [BUZÓN]: Error al leer el archivo de respuestas: %v", err)
+        return []RespuestaUnificada{}
+    }
+
+    // 3. Deserializamos
+    var respuestas []RespuestaUnificada
+    if err := json.Unmarshal(datos, &respuestas); err != nil {
+        log.Printf("❌ [BUZÓN]: Error al decodificar JSON (posible archivo corrupto): %v", err)
+        return []RespuestaUnificada{}
+    }
+
+    return respuestas
 }
 
 func generarRespuestaKimi(mensajeID int, contenido string) {
