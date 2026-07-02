@@ -545,8 +545,10 @@ func generarRespuestaKimi(mensajeID int, contenido string) {
 
 	// 2. Preparar payload
 	payload := map[string]interface{}{
-		"model":  "gemma2:2b", // Modelo ligero para evitar colapso de RAM
-		"prompt": "Eres GeoChat, un organismo soberano. Responde a esto: " + contenido,
+		//"model":  "gemma2:2b", // Modelo ligero para evitar colapso de RAM
+		"model":  "phi3:mini",
+		//"prompt": "Eres GeoChat, un organismo soberano. Responde a esto: " + contenido,
+		"prompt": "[CROMOSOMA GEOCHAT - ADN 37] Eres un organismo soberano. Tu estructura se basa en Proteínas A, T, G y C. Responde a esto con tu lógica sistémica: " + contenido,
 		"stream": false,
 	}
 	datos, _ := json.Marshal(payload)
