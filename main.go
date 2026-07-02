@@ -97,30 +97,36 @@ func main() {
 	// Esta ruta unificada entrega lo que Kimi ha respondido y lo que el Buzón tiene listo
 	// Definimos la lógica del handler en una variable o función para poder envolverla
 
-	handlerSalida := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// handlerSalida unifica la lectura de respuestas locales y pendientes
+	// Esta función debe sustituir a la que tenías en main.go
+	var handlerSalida = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
 
+		// 1. Siempre cargamos lo que Kimi ya procesó en nuestro disco local (Linux)
 		respuestas := cargarRespuestasKimi()
+
+		// 2. Cargamos lo que está en cola esperando ser procesado (Médula)
 		pendientes := cargarDeDisco()
 
+		// 3. Empaquetamos todo con un identificador de origen
 		data := map[string]interface{}{
 			"items":      respuestas,
 			"pendientes": pendientes,
+			"source":     "nativa_local_linux", // Identificador de soberanía de datos
+			"ts":         time.Now().Format(time.RFC3339),
 		}
 
 		w.Header().Set("Content-Type", "application/json")
+
+		// 4. Si hay error, logueamos pero intentamos responder igual
 		if err := json.NewEncoder(w).Encode(data); err != nil {
-			log.Printf("❌ [BUZÓN]: Error enviando payload: %v", err)
+			log.Printf("❌ [BUZÓN]: Error crítico al serializar respuesta: %v", err)
+			http.Error(w, "Error interno de persistencia", http.StatusInternalServerError)
 			return
 		}
 
-		if len(respuestas) > 0 {
-			//limpiarRespuestasKimi()
-		}
-		if len(pendientes) > 0 {
-			//guardarEnDisco([]MensajePendiente{})
-		}
+		log.Printf("📡 [BUZÓN]: Salida entregada. Items: %d, Pendientes: %d", len(respuestas), len(pendientes))
 	})
 
 	// Aplicamos el middleware aquí
@@ -534,52 +540,40 @@ func cargarRespuestasKimi() []RespuestaUnificada {
 	return respuestas
 }
 
+
 func generarRespuestaKimi(mensajeID int, contenido string) {
-	// 1. PROTECTOR DE ENTORNO: Si estamos en la nube, no intentamos llamar a Ollama local.
+	// 1. PROTECTOR DE ENTORNO Y DELEGACIÓN
 	if os.Getenv("RENDER") != "" {
-		log.Printf("☁️ [NODO]: Nube detectada. Delegando IA a Nodo Avellaneda...")
+		log.Printf("☁️ [NODO]: Nube detectada. Delegando IA al Nodo Avellaneda...")
+		go delegarAIAlNodoLocal(mensajeID, contenido)
 		return
 	}
 
+	// 2. EJECUCIÓN LOCAL (Solo si NO es Render)
 	log.Printf("🔥 [DEBUG]: Disparando Ollama local para mensaje %d...", mensajeID)
 
-	// 2. Preparar payload
 	payload := map[string]interface{}{
-		//"model":  "gemma2:2b", // Modelo ligero para evitar colapso de RAM
 		"model":  "phi3:mini",
-		//"prompt": "Eres GeoChat, un organismo soberano. Responde a esto: " + contenido,
 		"prompt": "[CROMOSOMA GEOCHAT - ADN 37] Eres un organismo soberano. Tu estructura se basa en Proteínas A, T, G y C. Responde a esto con tu lógica sistémica: " + contenido,
 		"stream": false,
 	}
 	datos, _ := json.Marshal(payload)
 
-	client := &http.Client{
-		Timeout: 60 * time.Second,
-	}
-
+	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Post("http://localhost:11434/api/generate", "application/json", bytes.NewBuffer(datos))
 	if err != nil {
-		log.Printf("❌ [KIMI-ERROR]: Ollama rechazó la conexión o Timeout: %v", err)
+		log.Printf("❌ [KIMI-ERROR]: Ollama rechazó la conexión: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	// 4. Leer y decodificar
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("❌ [KIMI-ERROR]: Error leyendo respuesta de Ollama: %v", err)
-		return
-	}
-
+	body, _ := ioutil.ReadAll(resp.Body)
 	var ollamaResp struct {
 		Response string `json:"response"`
 	}
-	if err := json.Unmarshal(body, &ollamaResp); err != nil {
-		log.Printf("❌ [KIMI-ERROR]: Error al parsear respuesta: %v", err)
-		return
-	}
+	json.Unmarshal(body, &ollamaResp)
 
-	// 5. Guardar persistencia
+	// 3. PERSISTENCIA
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -596,5 +590,28 @@ func generarRespuestaKimi(mensajeID int, contenido string) {
 	finalData, _ := json.MarshalIndent(respuestas, "", "  ")
 	os.WriteFile(archivoRespuestasKimi, finalData, 0644)
 
-	log.Printf("✅ [KIMI]: Respuesta de la IA integrada exitosamente para mensaje #%d", mensajeID)
+	log.Printf("✅ [KIMI]: Respuesta integrada para mensaje #%d", mensajeID)
+}
+
+func delegarAIAlNodoLocal(mensajeID int, contenido string) {
+	// 1. Define la URL a la que quieres enviar el mensaje
+	// NOTA: Asegúrate de que esta URL sea accesible desde la nube hacia tu Nodo (ej. túnel)
+	url := "http://tu-dominio-o-tunel.com/api/cortex/enviar-mensaje" 
+
+	payload := map[string]interface{}{
+		"id":      mensajeID,
+		"mensaje": contenido,
+	}
+	datos, _ := json.Marshal(payload)
+	
+	// 2. Corregimos el http.Post con los 3 argumentos obligatorios
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(datos))
+	
+	if err != nil {
+		log.Printf("❌ [DELEGACIÓN]: Fallo al contactar Nodo Avellaneda: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	
+	log.Printf("🚀 [DELEGACIÓN]: Mensaje #%d enviado al Nodo Avellaneda exitosamente.", mensajeID)
 }
