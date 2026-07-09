@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>GeoChat | Symmetry Flight Deck G700</title>
+    <style>
+        :root {
+            --glass: rgba(0, 20, 10, 0.85);
+            --matrix: #00ff41;
+            --gold: #d4af37;
+            --alert: #ff4444;
+            --sky: #00d2ff;
+        }
+
+        body {
+            margin: 0; background: #000; color: var(--matrix);
+            font-family: 'Segoe UI', 'Courier New', monospace; overflow: hidden;
+            perspective: 1500px;
+        }
+
+        #hud-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            border: 2px solid rgba(0, 255, 65, 0.1);
+            pointer-events: none; z-index: 100;
+            background: radial-gradient(circle, transparent 40%, rgba(0,255,65,0.05) 100%);
+        }
+
+        .cockpit-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 15px; padding: 30px; height: 95vh;
+            transform: rotateX(12deg); 
+            transform-style: preserve-3d;
+        }
+
+        .screen {
+            background: var(--glass);
+            border: 1.5px solid #222;
+            border-radius: 4px; padding: 15px;
+            box-shadow: 0 0 25px rgba(0, 255, 65, 0.1);
+            display: flex; flex-direction: column;
+            transition: all 0.4s ease; position: relative;
+        }
+
+        .screen:hover { border-color: var(--matrix); box-shadow: 0 0 40px rgba(0, 255, 65, 0.3); }
+
+        .screen-header {
+            font-size: 0.7em; color: var(--gold);
+            border-bottom: 1px solid #333; margin-bottom: 10px;
+            letter-spacing: 2px; font-weight: bold;
+        }
+
+        .main-display {
+            grid-column: 2 / 5; grid-row: 1;
+            background: rgba(0, 40, 0, 0.2);
+            border: 2px solid var(--matrix);
+            display: flex; justify-content: center; align-items: center;
+            flex-direction: column;
+        }
+
+        .lyrics-scroll {
+            font-style: italic; color: var(--gold);
+            font-size: 1.4em; text-shadow: 0 0 10px var(--gold);
+            margin-top: 20px; text-align: center;
+        }
+
+        .data-value { color: #fff; font-family: monospace; font-size: 1.1em; }
+        .paxg-counter { font-size: 1.5em; color: var(--gold); font-weight: bold; }
+
+        .radar-mini {
+            width: 60px; height: 60px; border: 1px solid var(--matrix);
+            border-radius: 50%; margin: 10px auto; position: relative;
+        }
+        .sweep {
+            position: absolute; width: 50%; height: 1.5px; background: var(--matrix);
+            top: 50%; left: 50%; transform-origin: left;
+            animation: rotate 2s linear infinite;
+        }
+
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        .sidestick-status { font-size: 0.6em; margin-top: auto; color: var(--sky); }
+    </style>
+</head>
+<body>
+
+<div id="hud-overlay"></div>
+
+<div class="cockpit-grid">
+    <div class="screen">
+        <div class="screen-header">01. POWER PLANT</div>
+        <div class="data-value">Seebeck: <span id="seebeck">14.2V</span></div>
+        <div class="data-value">Temp: 180°C</div>
+        <div class="sidestick-status">ACTIVE SIDESTICK SYNC: OK</div>
+    </div>
+
+    <div class="screen main-display">
+        <div style="font-size: 0.8em;">SYMMETRY FLIGHT DECK - GEOCAT</div>
+        <div class="lyrics-scroll" id="hendrix-lyrics">"All along the watchtower..."</div>
+        <div style="margin-top: 20px; font-size: 0.7em; color: var(--matrix);">SVS/EVS COMBINED VISION ACTIVE</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">02. FERMI RADAR</div>
+        <div class="radar-mini"><div class="sweep"></div></div>
+        <div style="font-size: 0.7em; text-align: center;">SIGNAL SCANNING...</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">03. PAXG TREASURY</div>
+        <div class="paxg-counter" id="paxg-display">0.0000</div>
+        <div style="font-size: 0.7em;">IA CEO: VALIDATING...</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">04. DRONE LOGISTICS</div>
+        <div class="data-value">FlyCart 30: ARMED</div>
+        <div class="data-value">Dist: 1.5km</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">05. QUANTUM VAULT</div>
+        <div class="data-value" style="color: var(--sky);">E2E ENCRYPTED</div>
+        <div class="data-value">Keys: Post-Quantum</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">06. PARTNER EQUITY</div>
+        <div class="data-value">Socio: 30%</div>
+        <div class="data-value">Zona: 40%</div>
+        <div class="data-value">Partner: 30%</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">07. KIMI ORCHESTRATOR</div>
+        <div id="kimi-logs" style="font-size: 0.6em; font-family: monospace; color: var(--matrix);"></div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">08. NODE STATUS</div>
+        <div class="data-value" id="node-location">AVELLANEDA</div>
+        <div class="data-value">Freq: 432Hz</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">09. DEAL FLOW</div>
+        <div class="data-value" style="color: var(--gold);">INV. 250K USD</div>
+        <div class="data-value">Equity: 5%</div>
+        <div class="sidestick-status">WAITING ARCHITECT SIGNATURE</div>
+    </div>
+
+    <div class="screen" style="border-color: var(--alert); cursor: pointer;" onclick="exitNave()">
+        <div class="screen-header" style="color: var(--alert);">10. EMERGENCY EXIT</div>
+        <div style="font-size: 0.7em; text-align: center; margin-top: 10px;">VUELTA AL BÚNKER</div>
+    </div>
+</div>
+
+<script>
+    const lyrics = [
+        "\"There must be some way out of here,\"",
+        "Said the joker to the thief...",
+        "\"There's too much confusion,\"",
+        "I can't get no relief.\"",
+        "The wind began to howl..."
+    ];
+    let lyricIdx = 0;
+
+    function updateLyrics() {
+        document.getElementById('hendrix-lyrics').innerText = lyrics[lyricIdx];
+        lyricIdx = (lyricIdx + 1) % lyrics.length;
+    }
+
+    // 📡 SINCRONÍA LOCAL: Apuntamos al motor Go del puerto 8080
+    async function syncNave() {
+        try {
+            // Ajustado para conectar con el motor local independientemente del origin
+            const res = await fetch('http://localhost:8080/api/cortex/ultimo-pulso');
+            if (res.ok) {
+                const d = await res.json();
+                
+                // Si el motor reporta OFFLINE, eyectamos al Oráculo
+                if (d.status === "OFFLINE") {
+                    exitNave();
+                }
+
+                document.getElementById('paxg-display').innerText = (d.paxg || 0).toFixed(4);
+                
+                // Telemetría de Kimi en tiempo real
+                const logs = document.getElementById('kimi-logs');
+                const p = document.createElement('div');
+                p.innerText = `> PULSE: ${d.frecuencia || 432}Hz | STATUS: ${d.status}`;
+                logs.prepend(p);
+                if(logs.children.length > 5) logs.lastChild.remove();
+            }
+        } catch (e) { 
+            console.log("Perdiendo señal con Cortex local..."); 
+        }
+    }
+
+    // 🚪 SALIDA EXPLÍCITA: Para Linux Mint / Localhost
+    function exitNave() {
+        // Apuntamos al archivo index.html explícitamente para evitar errores de ruteo local
+        window.location.href = "index.html";
+    }
+
+    setInterval(updateLyrics, 3000);
+    setInterval(syncNave, 2000);
+</script>
+</body>
+</html>

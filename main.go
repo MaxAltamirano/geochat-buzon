@@ -226,6 +226,26 @@ func main() {
 		log.Printf("📥 [BUZÓN]: Inyección recibida de %s", m.Entidad)
 	}))
 
+	mux.HandleFunc("/api/radar-pulse", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		// 1. Headers necesarios para que EventSource entienda que es un stream
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		// 2. Formato esperado por EventSource: "data: <json>\n\n"
+		data := map[string]interface{}{
+			"status":     "Cortex Online",
+			"satelites":  []string{"NODO_A", "NODO_B"},
+			"frecuencia": 432.00,
+		}
+		jsonData, _ := json.Marshal(data)
+
+		// Enviamos el pulso
+		fmt.Fprintf(w, "data: %s\n\n", jsonData)
+		w.(http.Flusher).Flush() // Fuerza el envío inmediato
+	}))
+
 	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -242,26 +262,26 @@ func main() {
 }
 
 func agregarAlHistorial(m Mensaje) {
-    mu.Lock()
-    defer mu.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
 
-    // 1. Cargamos lo que hay
-    respuestas := cargarRespuestasKimi()
+	// 1. Cargamos lo que hay
+	respuestas := cargarRespuestasKimi()
 
-    // 2. Creamos la nueva entrada
-    nueva := RespuestaUnificada{
-        Contexto:  m.Entidad,
-        Cuerpo:    m.Mensaje,
-        Timestamp: time.Now(),
-    }
-    respuestas = append(respuestas, nueva)
+	// 2. Creamos la nueva entrada
+	nueva := RespuestaUnificada{
+		Contexto:  m.Entidad,
+		Cuerpo:    m.Mensaje,
+		Timestamp: time.Now(),
+	}
+	respuestas = append(respuestas, nueva)
 
-    // 3. Guardamos en el archivo persistente
-    datos, _ := json.MarshalIndent(respuestas, "", "  ")
-    err := os.WriteFile(archivoRespuestasKimi, datos, 0644)
-    if err != nil {
-        log.Printf("❌ [BUZÓN]: Error crítico al persistir en disco: %v", err)
-    }
+	// 3. Guardamos en el archivo persistente
+	datos, _ := json.MarshalIndent(respuestas, "", "  ")
+	err := os.WriteFile(archivoRespuestasKimi, datos, 0644)
+	if err != nil {
+		log.Printf("❌ [BUZÓN]: Error crítico al persistir en disco: %v", err)
+	}
 }
 
 // Pon esto fuera de la función main()
@@ -575,32 +595,32 @@ func InyectarCromosomasEnKimi() error {
 }
 
 // --- SECCIÓN DE PERSISTENCIA DE KIMI (Añadir esto al final de main.go) ---
-//const archivoRespuestasKimi = "respuestas_kimi.json"
-const  archivoRespuestasKimi = "./storage/respuestas_kimi.json"
+// const archivoRespuestasKimi = "respuestas_kimi.json"
+const archivoRespuestasKimi = "./storage/respuestas_kimi.json"
 
 // Necesitamos esta función para cargar el estado previo
 func cargarRespuestasKimi() []RespuestaUnificada {
-    // 1. Verificamos existencia
-    if _, err := os.Stat(archivoRespuestasKimi); os.IsNotExist(err) {
-        log.Printf("⚠️ [BUZÓN]: Archivo de respuestas no existe en %s, iniciando nuevo historial.", archivoRespuestasKimi)
-        return []RespuestaUnificada{}
-    }
+	// 1. Verificamos existencia
+	if _, err := os.Stat(archivoRespuestasKimi); os.IsNotExist(err) {
+		log.Printf("⚠️ [BUZÓN]: Archivo de respuestas no existe en %s, iniciando nuevo historial.", archivoRespuestasKimi)
+		return []RespuestaUnificada{}
+	}
 
-    // 2. Leemos el archivo
-    datos, err := os.ReadFile(archivoRespuestasKimi)
-    if err != nil {
-        log.Printf("❌ [BUZÓN]: Error al leer el archivo de respuestas: %v", err)
-        return []RespuestaUnificada{}
-    }
+	// 2. Leemos el archivo
+	datos, err := os.ReadFile(archivoRespuestasKimi)
+	if err != nil {
+		log.Printf("❌ [BUZÓN]: Error al leer el archivo de respuestas: %v", err)
+		return []RespuestaUnificada{}
+	}
 
-    // 3. Deserializamos
-    var respuestas []RespuestaUnificada
-    if err := json.Unmarshal(datos, &respuestas); err != nil {
-        log.Printf("❌ [BUZÓN]: Error al decodificar JSON (posible archivo corrupto): %v", err)
-        return []RespuestaUnificada{}
-    }
+	// 3. Deserializamos
+	var respuestas []RespuestaUnificada
+	if err := json.Unmarshal(datos, &respuestas); err != nil {
+		log.Printf("❌ [BUZÓN]: Error al decodificar JSON (posible archivo corrupto): %v", err)
+		return []RespuestaUnificada{}
+	}
 
-    return respuestas
+	return respuestas
 }
 
 func generarRespuestaKimi(mensajeID int, contenido string) {

@@ -73,8 +73,26 @@ onMounted(() => {
   if (props.isVisible) audioHendrix.play().catch(() => console.log("Waiting for user gesture"));
 });
 
+
+
+// --- WATCHERS PARA EL SALTO SÓNICO ---
+onMounted(() => {
+  // Escuchar el evento personalizado de negociación
+  window.addEventListener('abrir-tesla', (event: Event) => {
+    const e = event as CustomEvent;
+    activeModule.value = e.detail;
+    isVisible.value = true;
+    
+    // Reproducción segura
+    audioHendrix.play().catch(err => console.warn("Audio bloqueado por política de navegador", err));
+  });
+});
+
 onUnmounted(() => {
+  // IMPORTANTE: Limpiar el event listener para evitar duplicados si el componente se destruye/crea
+  window.removeEventListener('abrir-tesla', () => {});
   audioHendrix.pause();
+  audioHendrix.currentTime = 0;
 });
 </script>
 

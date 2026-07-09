@@ -9,7 +9,7 @@ package.json
 geochat-movil
 main
 buzon_server
-geochat-buzon
+//geochat-buzon
 *.log
 *.bak
 

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>GeoChat | Symmetry Flight Deck G700 - ONLINE</title>
+    <style>
+        :root {
+            --glass: rgba(0, 20, 10, 0.88);
+            --matrix: #00ff41;
+            --gold: #d4af37;
+            --alert: #ff4444;
+            --sky: #00d2ff;
+        }
+
+        body {
+            margin: 0; background: #000; color: var(--matrix);
+            font-family: 'Segoe UI', 'Courier New', monospace; overflow: hidden;
+            perspective: 1500px; /* Profundidad para el efecto G700 */
+        }
+
+        /* HUD Superior - Capa de Datos Críticos */
+        #hud-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            border: 2px solid rgba(0, 255, 65, 0.05);
+            pointer-events: none; z-index: 100;
+            background: radial-gradient(circle, transparent 50%, rgba(0,255,65,0.05) 100%);
+        }
+
+        .cockpit-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 15px; padding: 25px; height: 95vh;
+            transform: rotateX(10deg); /* Inclinación de la consola Symmetry */
+            transform-style: preserve-3d;
+        }
+
+        /* Pantallas Táctiles (10 Unidades) */
+        .screen {
+            background: var(--glass);
+            border: 1.5px solid #222;
+            border-radius: 4px; padding: 12px;
+            box-shadow: 0 0 25px rgba(0, 255, 65, 0.1);
+            display: flex; flex-direction: column;
+            transition: all 0.3s ease; position: relative;
+        }
+
+        .screen:hover { border-color: var(--matrix); box-shadow: 0 0 40px rgba(0, 255, 65, 0.2); }
+
+        .screen-header {
+            font-size: 0.7em; color: var(--gold); border-bottom: 1px solid #333;
+            margin-bottom: 8px; letter-spacing: 2px; font-weight: bold;
+        }
+
+        /* Pantalla de Visión Sintética (HUD Principal) */
+        .main-display {
+            grid-column: 2 / 5; grid-row: 1;
+            background: rgba(0, 40, 0, 0.15); border: 2px solid var(--matrix);
+            display: flex; justify-content: center; align-items: center; flex-direction: column;
+        }
+
+        .lyrics-scroll {
+            font-style: italic; color: var(--gold); font-size: 1.4em;
+            text-shadow: 0 0 12px var(--gold); margin-top: 15px; text-align: center;
+        }
+
+        .data-value { color: #fff; font-family: monospace; font-size: 1em; margin: 2px 0; }
+        .paxg-counter { font-size: 1.6em; color: var(--gold); font-weight: bold; text-shadow: 0 0 10px rgba(212, 175, 55, 0.5); }
+
+        /* Sidestick Status Indicators */
+        .sidestick-active { font-size: 0.6em; margin-top: auto; color: var(--sky); letter-spacing: 1px; }
+
+        /* Radar Miniaturizado */
+        .radar-mini {
+            width: 50px; height: 50px; border: 1px solid var(--matrix);
+            border-radius: 50%; margin: 8px auto; position: relative;
+        }
+        .sweep {
+            position: absolute; width: 50%; height: 2px; background: var(--matrix);
+            top: 50%; left: 50%; transform-origin: left;
+            animation: rotate-radar 2.5s linear infinite;
+        }
+        @keyframes rotate-radar { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    </style>
+</head>
+<body>
+
+<div id="hud-overlay"></div>
+
+<div class="cockpit-grid">
+    <div class="screen">
+        <div class="screen-header">01. ENERGY CORE</div>
+        <div class="data-value">Zinc/Seebeck: <span id="volt">14.2V</span></div>
+        <div class="data-value">Grid Status: OFF-GRID</div>
+        <div class="sidestick-active">SYNC: ACTIVE SIDESTICK</div>
+    </div>
+
+    <div class="screen main-display">
+        <div style="font-size: 0.7em; letter-spacing: 3px;">SVS / EVS COMBINED VISION</div>
+        <div class="lyrics-scroll" id="lyrics-engine">"All along the watchtower..."</div>
+        <div style="margin-top: 15px; font-size: 0.6em; color: var(--matrix);">GEOCAT NODO: AVELLANEDA</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">02. FERMI RADAR</div>
+        <div class="radar-mini"><div class="sweep"></div></div>
+        <div style="font-size: 0.65em; text-align: center;">SCANNING PARADOX...</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">03. PAXG VAULT</div>
+        <div class="paxg-counter" id="paxg-val">0.0000</div>
+        <div style="font-size: 0.7em;">CEO AUTÓNOMO: TRADING</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">04. DRONE FLEET</div>
+        <div class="data-value">FlyCart 30: ARMED</div>
+        <div class="data-value">Signal: SAT-LINK</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">05. SECURITY LAYER</div>
+        <div class="data-value" style="color: var(--sky);">E2E SEALED</div>
+        <div class="data-value">No MITM Detected</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">06. EQUITY SPLIT</div>
+        <div class="data-value">Socio: 30%</div>
+        <div class="data-value">Zona: 40%</div>
+        <div class="data-value">Partner: 30%</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">07. AI CORTEX</div>
+        <div id="ai-logs" style="font-size: 0.6em; font-family: monospace; color: var(--matrix);"></div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">08. FREQ ANALYZER</div>
+        <div class="data-value">Master: 432.00 Hz</div>
+        <div class="data-value">Phase: Sincronized</div>
+    </div>
+
+    <div class="screen">
+        <div class="screen-header">09. DEAL FLOW</div>
+        <div class="data-value" style="color: var(--gold);">VAL: 250,000 USD</div>
+        <div class="data-value">SHARE: 5%</div>
+        <div class="sidestick-active">WAITING ARCHITECT SIGN</div>
+    </div>
+
+    <div class="screen" style="border-color: var(--alert); cursor: pointer;" onclick="exitNave()">
+        <div class="screen-header" style="color: var(--alert);">10. EMERGENCY EXIT</div>
+        <div style="font-size: 0.7em; text-align: center; margin-top: 10px;">VUELTA AL BÚNKER</div>
+    </div>
+</div>
+
+<script>
+    const lyrics = [
+        "\"There must be some way out of here,\"",
+        "Said the joker to the thief...",
+        "\"There's too much confusion,\"",
+        "I can't get no relief.\"",
+        "No reason to get excited...",
+        "The thief, he kindly spoke..."
+    ];
+    let lIdx = 0;
+
+    function rotateLyrics() {
+        document.getElementById('lyrics-engine').innerText = lyrics[lIdx];
+        lIdx = (lIdx + 1) % lyrics.length;
+    }
+
+    async function updateTelemetry() {
+        try {
+            const res = await fetch(window.location.origin + '/api/cortex/ultimo-pulso');
+            if (res.ok) {
+                const d = await res.json();
+                
+                // Si el backend cae a OFFLINE, eyectamos la Nave
+                if (d.status === "OFFLINE") {
+                    exitNave();
+                }
+
+                document.getElementById('paxg-val').innerText = d.paxg.toFixed(4);
+                
+                const logs = document.getElementById('ai-logs');
+                const logEntry = document.createElement('div');
+                logEntry.innerText = `> PULSE: ${d.frecuencia}Hz OK`;
+                logs.prepend(logEntry);
+                if (logs.children.length > 4) logs.lastChild.remove();
+            }
+        } catch (e) { console.log("Signal Interrupted."); }
+    }
+
+    function exitNave() {
+        // Comunicar al padre (index.html) que volvemos a la Bomba Matemática
+        window.parent.postMessage("MODO_OFFLINE_RELOAD", "*");
+    }
+
+    setInterval(rotateLyrics, 3500);
+    setInterval(updateTelemetry, 2500);
+</script>
+</body>
+</html>
