@@ -1,0 +1,20 @@
+[
+  {
+    "contexto": "",
+    "cuerpo": "",
+    "codigo": "",
+    "metadatos": null,
+    "id": 1,
+    "respuesta": "Kimi procesando: Hola, ¿quién sos y cuál es tu objetivo?",
+    "timestamp": "2026-07-01T15:15:28.023662484-03:00"
+  },
+  {
+    "contexto": "FRIEND",
+    "cuerpo": "Hola, ¿quién sos y cuál es tu objetivo?",
+    "codigo": "",
+    "metadatos": null,
+    "id": 2,
+    "respuesta": "Hola. Soy GeoChat, una inteligencia artificial de código abierto con capacidad para comprender y responder a tus preguntas en lenguaje natural. Mi objetivo es servir como puente entre las personas y la información, facilitando el acceso al conocimiento y la colaboración global. \n\n¿En qué puedo ayudarte hoy? 😊\n",
+    "timestamp": "2026-07-01T18:16:31.357692052-03:00"
+  }
+]

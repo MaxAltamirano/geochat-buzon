@@ -1,13 +1,25 @@
-# Binarios y logs
+# --- Ignorar node_modules en todos los niveles ---
+node_modules/
+
+# --- Ignorar configuraciones de paquetes ---
+package-lock.json
+package.json
+
+# --- Binarios y logs ---
 geochat-movil
 main
-*.log
-*.bak
-.DS_Store
-# Archivos de sistema
-.git/
-go.sum
-index.html
-*.json
 buzon_server
 geochat-buzon
+*.log
+*.bak
+
+# --- Sistema ---
+.git/
+.DS_Store
+
+# --- Archivos críticos permitidos ---
+!cortex_context.json
+!cromosoma_memoria.json
+!medula_local.json
+!respuestas_kimi.json
+!sync_high_density.json

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GeoChat | Sistema Nervioso Central</title>
+    <style>
+        /* --- ESTÉTICA SOBERANA --- */
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            overflow: hidden; background: #000; 
+            font-family: 'Courier New', monospace; 
+        }
+
+        .gold { color: #d4af37; text-shadow: 0 0 10px #d4af37; }
+        .neon { color: #00ff41; text-shadow: 0 0 10px #00ff41; }
+
+        /* --- GESTIÓN DE CAPAS --- */
+        .capa { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            border: none; transition: opacity 1.5s ease-in-out; 
+            z-index: 1;
+        }
+        .oculto { opacity: 0; pointer-events: none; }
+        .visible { opacity: 1; pointer-events: auto; z-index: 10; }
+
+        /* --- MODAL DE INYECCIÓN MÓVIL --- */
+        #modal-movil {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.98);
+            z-index: 5000; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; padding: 20px; box-sizing: border-box;
+        }
+        .box-comando {
+            background: #111; border: 1px solid #d4af37;
+            padding: 15px; margin: 15px 0; font-size: 11px;
+            color: #00ff41; width: 90%; word-break: break-all;
+            border-radius: 5px; cursor: pointer;
+        }
+
+        /* --- VÁLVULA DE ESCAPE --- */
+        #valvula-escape {
+            position: fixed; bottom: 20px; right: 20px;
+            width: 60px; height: 60px;
+            border-radius: 50%; cursor: pointer;
+            z-index: 2000; transition: all 0.5s ease;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+        }
+
+        /* --- ELEMENTOS DINÁMICOS --- */
+        .pelos {
+            position: absolute; width: 100%; height: 100%;
+            border-radius: 50%; border-top: 2px solid #d4af37;
+            animation: girar-pelos 1s linear infinite;
+        }
+        @keyframes girar-pelos {
+            from { transform: rotate(0deg) scale(1); }
+            to { transform: rotate(360deg) scale(1.1); }
+        }
+        .log-entry { color: #00ff41; font-size: 10px; padding: 8px; text-align: center; animation: pulse-green 2s infinite; }
+        @keyframes pulse-green { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+        /* --- ADAPTACIÓN PARA CELULARES (RESPONSIVE) --- */
+        @media (max-width: 768px) {
+            #capa-online-flex {
+                flex-direction: column !important;
+                padding: 10px !important;
+                overflow-y: auto !important;
+            }
+            #visor-telemetria {
+                flex: none !important;
+                width: 100% !important;
+                height: 120px !important;
+                margin-right: 0 !important;
+                margin-bottom: 15px !important;
+            }
+            #radarCanvas {
+                width: 85vw !important;
+                height: 85vw !important;
+            }
+            #status-panel {
+                width: 90% !important;
+                font-size: 0.75em !important;
+            }
+            h1.gold { font-size: 1em !important; }
+            #valvula-escape { width: 50px; height: 50px; bottom: 10px; right: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 📱 CAPA DE INYECCIÓN -->
+    <div id="modal-movil">
+        <h2 class="gold">🔱 NODO MÓVIL</h2>
+        <p style="color: #fff; font-size: 0.85em;">Ejecutá este comando en Termux:</p>
+        <div class="box-comando" id="cmd-text" onclick="copiarComando()">
+            curl -sL https://geochat-buzon.onrender.com/despertar.sh | bash
+        </div>
+        <button onclick="cerrarInyeccion()" style="background: none; border: 1px solid #444; color: #888; padding: 10px; cursor: pointer; font-size: 0.8em;">
+            [ Continuar al Radar ]
+        </button>
+        <p id="copy-status" style="margin-top: 10px; font-size: 0.75em;" class="neon"></p>
+    </div>
+
+    <iframe id="capa-offline" src="/cascarafrontendrender/nave-offline.html" class="capa visible"></iframe>
+
+    <div id="capa-online" class="capa oculto">
+        <div id="capa-online-flex" style="display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100vw; height: 100vh; padding: 20px; box-sizing: border-box;">
+            
+            <div id="visor-telemetria" style="flex: 0 0 280px; height: 80vh; overflow-y: auto; background: rgba(0, 10, 0, 0.9); border: 1px solid #00ff41; padding: 10px; border-radius: 4px; margin-right: 20px;">
+                <div class="log-entry">[ ESCANEANDO LATTICE... ]</div>
+            </div>
+
+            <div id="radar-container" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <h1 class="gold" style="margin-bottom: 10px; letter-spacing: 1px;">🔱 RESONANCIA 432Hz</h1>
+                <canvas id="radarCanvas" width="450" height="450"></canvas>
+                
+                <div id="status-panel" style="width: 100%; max-width: 450px; background: rgba(0,20,0,0.95); padding: 12px; border: 1px solid #333; margin-top: 10px; border-radius: 4px;">
+                    <div style="color: #00ff41; font-size: 0.85em;"> > NODO: <span id="mind-status">SINCRO_OK</span></div>
+                    <hr style="border: 0.5px solid rgba(255,255,255,0.1); margin: 8px 0;">
+                    <div style="display: flex; justify-content: space-between; color: #fff; font-size: 0.8em;">
+                        <span>SDR: <span id="sat-count" class="gold">0</span></span>
+                        <span>PAXG: <span class="gold">15.15</span></span>
+                        <span>FREQ: <span id="freq-val" class="gold">432.00</span> Hz</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="valvula-escape" onclick="location.reload()" title="Sincronizar ADN">
+        <div class="pelos"></div>
+        <div class="pelos" style="transform: rotate(60deg);"></div>
+    </div>
+
+    <script src="/cascarafrontendrender/radar.js"></script>
+
+    <script>
+        const BUZON_URL = window.location.origin; 
+        const modalMovil = document.getElementById('modal-movil');
+
+        function detectarMovil() {
+            if (/Android/i.test(navigator.userAgent) && !sessionStorage.getItem('geochat_mobile_skip')) {
+                modalMovil.style.display = 'flex';
+            }
+        }
+
+        function copiarComando() {
+            const cmd = document.getElementById('cmd-text').innerText;
+            navigator.clipboard.writeText(cmd);
+            document.getElementById('copy-status').innerText = "✅ COPIADO. Pegalo en Termux.";
+        }
+
+        function cerrarInyeccion() {
+            modalMovil.style.display = 'none';
+            sessionStorage.setItem('geochat_mobile_skip', 'true');
+        }
+
+        async function monitorPulse() {
+        try {
+            // Apuntamos al endpoint que SI responde "Cortex Online"
+            const res = await fetch(`${BUZON_URL}/`, { cache: "no-store" }); 
+            if (!res.ok) throw new Error();
+            const d = await res.json();
+        
+            // Si el status dice "Cortex Online", activamos el radar
+            if (d.status === "Cortex Online") {
+                activarModoOnline(d); 
+                } else {
+                    forzarOffline();
+                }
+            } catch (e) { forzarOffline(); }
+        }
+
+        function activarModoOnline(d) {
+            const off = document.getElementById('capa-offline');
+            const on = document.getElementById('capa-online');
+            if (off.classList.contains("visible")) {
+                off.classList.replace("visible", "oculto");
+                on.classList.replace("oculto", "visible");
+            }
+            document.getElementById('sat-count').innerText = (d.satelites) ? d.satelites.length : 0;
+            document.getElementById('freq-val').innerText = d.frecuencia ? d.frecuencia.toFixed(2) : "432.00";
+        }
+
+        function forzarOffline() {
+            const off = document.getElementById('capa-offline');
+            const on = document.getElementById('capa-online');
+            if (on.classList.contains("visible")) {
+                on.classList.replace("visible", "oculto");
+                off.classList.replace("oculto", "visible");
+            }
+        }
+
+        detectarMovil();
+        setInterval(monitorPulse, 5000);
+        monitorPulse();
+    </script>
+</body>
+</html>
