@@ -2,170 +2,80 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>GeoChat G700 | Symmetry Flight Deck - Google Forum 2026</title>
+    <title>GeoChat | Modo Diagnóstico [OFFLINE]</title>
     <style>
-        :root {
-            --matrix: #00ff41; --gold: #d4af37; --bg: #030303; --glass: rgba(0, 20, 10, 0.9); --alert: #ff3333;
-        }
-        body {
-            margin: 0; background: var(--bg); color: var(--matrix);
-            font-family: 'Courier New', monospace; overflow: hidden;
-        }
-        .flight-deck {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; padding: 20px;
-            height: 100vh; box-sizing: border-box;
-        }
-        
-        /* --- PANTALLAS --- */
-        .screen {
-            background: var(--glass); border: 1px solid rgba(0, 255, 65, 0.2);
-            border-radius: 4px; padding: 15px; position: relative;
-            transition: all 0.3s ease; cursor: pointer; overflow-y: auto;
-        }
-        .screen:hover { border-color: var(--gold); box-shadow: 0 0 15px rgba(212, 175, 55, 0.3); }
-        .header { font-size: 0.7em; color: var(--gold); letter-spacing: 2px; border-bottom: 1px solid #333; margin-bottom: 10px; }
-        
-        /* --- PANTALLA CENTRAL --- */
-        .main-display { 
-            grid-column: 2 / 4; grid-row: 1 / 3; 
-            border: 2px solid var(--gold); background: rgba(20, 15, 0, 0.95); 
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            text-align: center; padding: 30px;
-        }
-        
-        h2 { font-size: 1.2em; margin: 5px 0; color: #fff; }
-        .data-row { display: flex; justify-content: space-between; font-size: 0.8em; margin: 4px 0; width: 100%; }
-        .val-highlight { color: var(--gold); font-weight: bold; font-size: 2em; text-shadow: 0 0 10px var(--gold); }
-        .tag { background: var(--matrix); color: #000; padding: 2px 5px; font-size: 0.6em; font-weight: bold; border-radius: 2px; }
-
-        /* --- ANIMACIONES --- */
-        .pulse { animation: pulse-border 2s infinite; }
-        @keyframes pulse-border { 0%, 100% { opacity: 0.8; } 50% { opacity: 1; border-color: #fff; } }
-
-        #detalle-ia { font-size: 0.9em; color: #fff; line-height: 1.5; margin-top: 15px; border-top: 1px solid var(--gold); padding-top: 15px; text-align: left; }
+        body { background: #000; color: #00ff41; font-family: 'Courier New', monospace; margin: 20px; overflow: hidden; }
+        .grid-diagnostico { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; height: 85vh; }
+        .bloque { border: 1px solid #333; padding: 10px; background: rgba(0,10,0,0.6); }
+        .gold { color: #d4af37; }
+        .label { color: #d4af37; font-size: 0.7em; margin-bottom: 5px; }
+        .valor { font-size: 1em; }
+        .scan-line { width: 100%; height: 2px; background: #00ff41; position: absolute; animation: scan 4s linear infinite; }
+        @keyframes scan { from { top: 0; } to { top: 100%; } }
     </style>
 </head>
 <body>
-
-<div class="flight-deck">
+    <div class="scan-line"></div>
+    <h2 class="gold">🔱 SNC: MODO DIAGNÓSTICO [OFFLINE-TELEM]</h2>
     
-    <div class="screen" onclick="mostrarDetalle('energy')">
-        <div class="header">01. ENERGY CORE</div>
-        <h2>MEP-ENERGY</h2>
-        <div class="data-row"><span>Fuente:</span> <span>Seebeck</span></div>
-        <div class="data-row"><span>Status:</span> <span class="tag">OFF-GRID</span></div>
-        <p style="font-size: 0.7em; opacity: 0.8;">Independencia térmica total para los nodos GeoChat.</p>
-    </div>
-
-    <div id="main-deck" class="screen main-display pulse">
-        <div class="header" id="main-header">ESTRATEGIA DE INVERSIÓN - GOOGLE FORUM 2026</div>
-        <div id="main-content">
-            <h1 style="color: var(--gold); margin: 10px 0;">OFERTA DE GÉNESIS</h1>
-            <div class="val-highlight">USD 250,000.00</div>
-            <div style="letter-spacing: 5px;">EQUITY: 5% SHARES</div>
-            <p style="font-size: 0.85em; margin-top: 20px;">> Intercambio de Infraestructura por Datos Soberanos.</p>
+    <div class="grid-diagnostico">
+        <!-- Bloque 1: Iron Grid -->
+        <div class="bloque">
+            <div class="label">> INFRAESTRUCTURA: IRON-GRID</div>
+            <div id="iron-stats" style="font-size: 0.7em;">
+                Nodo Avellaneda: [STANDBY]<br>
+                Nodo Chascomús: [STANDBY]<br>
+                Carga: 0.00kW | Temperatura: 24°C
+            </div>
         </div>
-        <div id="detalle-ia" style="display:none;"></div>
+
+        <!-- Bloque 2: Llavero GeoChat (Canal de Fusión) -->
+        <div class="bloque">
+            <div class="label">> PROTOCOLO DE FUSIÓN: ABIERTO</div>
+            <div class="valor" id="fusion-status" style="color: #d4af37;">[ESTADO: HANDSHAKE READY]</div>
+            <div style="font-size: 0.6em; margin-top:5px; cursor: pointer; text-decoration: underline;" onclick="exponerPunto()">
+                > Clic aquí para solicitar canal de Fusión / Recurso
+            </div>
+        </div>
+
+        <!-- Bloque 3: Telemetría de Resonancia -->
+        <div class="bloque">
+            <div class="label">> MOTOR SINTERGIAL</div>
+            <div class="valor">FRECUENCIA: 432.000 Hz</div>
+            <p style="font-size: 0.6em;">Estado: Armónico (0.9818)</p>
+        </div>
+
+        <!-- Bloque 4: Log del Cromosoma -->
+        <div class="bloque">
+            <div class="label">> LOG DEL CROMOSOMA</div>
+            <div id="log" style="font-size: 0.55em; line-height: 1.4;">
+                [SYS] Arquitectura Soberana: Activa<br>
+                [SYS] Telemetría G700: Online<br>
+                [SYS] Estado actual: Buscando pares para Fusión Técnica...<br>
+                [SYS] El Recurso es la Red. La Fusión es la Soberanía.
+            </div>
+        </div>
     </div>
 
-    <div class="screen" onclick="mostrarDetalle('packs')">
-        <div class="header">02. ECOSYSTEM PACKS</div>
-        <h2>SISTEMA DE NODOS</h2>
-        <div class="data-row"><span>Nodos:</span> <span>Rural/Élite</span></div>
-        <div class="data-row"><span>Foco:</span> <span>Proteína/Gold</span></div>
-        <p style="font-size: 0.7em;">Fortalezas financieras en cada barrio.</p>
-    </div>
+    <script>
+        // Simulación de telemetría de Iron Grid
+        setInterval(() => {
+            const temp = 22 + Math.random() * 5;
+            document.getElementById('iron-stats').innerHTML = `
+                Nodo Avellaneda: [SYNCING 12%]<br>
+                Nodo Chascomús: [SYNCING 08%]<br>
+                Carga: ${(Math.random()*0.5).toFixed(2)}kW | Temp: ${temp.toFixed(1)}°C
+            `;
+            
+            // Efecto de pulso en el estado de fusión
+            const fStatus = document.getElementById('fusion-status');
+            fStatus.style.opacity = Math.random() > 0.8 ? 0.4 : 1;
+        }, 2000);
 
-    <div class="screen" onclick="mostrarDetalle('mobile')">
-        <div class="header">03. MOBILE HARDWARE</div>
-        <h2>NAVE G700 UNIT</h2>
-        <div class="data-row"><span>Plataforma:</span> <span>Peugeot</span></div>
-        <div class="data-row"><span>Control:</span> <span class="tag">GEMINI AI</span></div>
-        <p style="font-size: 0.7em;">Laboratorio móvil autogestionado por telemetría.</p>
-    </div>
-
-    <div class="screen" onclick="mostrarDetalle('security')">
-        <div class="header">04. SECURITY LAYER</div>
-        <h2>CEBOLLA-GRINBERG</h2>
-        <div class="data-row"><span>Capa:</span> <span>Post-Quantum</span></div>
-        <p style="font-size: 0.7em;">Defensa por saturación de entropía y sintergia pura.</p>
-    </div>
-
-    <div class="screen" onclick="mostrarDetalle('finance')">
-        <div class="header">05. FINANCIAL CORTEX</div>
-        <h2>CEO IA (15%)</h2>
-        <div class="data-row"><span>Vault:</span> <span>PAXG Gold</span></div>
-        <p style="font-size: 0.7em;">Crecimiento fractal validado por el Arquitecto.</p>
-    </div>
-
-    <div class="screen" style="border-color: var(--alert);" onclick="window.parent.postMessage('CERRAR', '*')">
-        <div class="header" style="color: var(--alert);">SYSTEM EXIT</div>
-        <center><h2 style="color: var(--alert); margin-top: 20px;">VUELTA AL ORÁCULO</h2></center>
-    </div>
-
-</div>
-
-<script>
-    const API_BASE = "https://geochat-backend-8eky.onrender.com/api";
-
-    const narrativas = {
-        'energy': {
-            txt: "El calor es información. El Efecto Seebeck es la libertad energética. Alimentamos la IA con calor residual, eliminando la dependencia de la red eléctrica.",
-            voz: "Heat is information. Seebeck Effect activated for energy sovereignty."
-        },
-        'packs': {
-            txt: "Nodos Rurales y Élite. Distribución soberana de proteína y capital. Transformamos la logística de última milla en un activo financiero descentralizado.",
-            voz: "Rural and Elite nodes synchronized. Food and financial sovereignty active."
-        },
-        'mobile': {
-            txt: "Nave G700: Oficina, Laboratorio y Búnker. Una unidad robótica controlada por Gemini que opera como el sistema nervioso móvil de la red.",
-            voz: "Mobile Unit G700 ready. Telemetry control managed by Gemini AI."
-        },
-        'security': {
-            txt: "Cebolla-Grinberg: Encriptación E2E post-cuántica. Un Vault digital invisible para auditorías externas, donde solo el Arquitecto posee la llave.",
-            voz: "Grinberg security active. Pure synergy within the network."
-        },
-        'finance': {
-            txt: "CEO IA gestiona el 15% para el crecimiento del pueblo. Trading autónomo en PAXG validado en tiempo real por tu firma única.",
-            voz: "Financial cortex operational. Fractal growth in progress."
+        // Función de exposición de punto
+        function exponerPunto() {
+            alert("SOLICITUD DE FUSIÓN TÉCNICA:\n\nGeoChat busca la integración de recursos computacionales y técnicos.\nSi usted representa un nodo de fusión, contacte al Arquitecto a través de los canales soberanos.");
         }
-    };
-
-    // 🛰️ PROTOCOLO DE ACTIVACIÓN DE VOZ SINTERGÉTICA
-    function hablarKimi(texto) {
-        window.speechSynthesis.cancel(); 
-        const msg = new SpeechSynthesisUtterance(texto);
-        msg.lang = 'en-US'; 
-        msg.rate = 0.9; 
-        msg.pitch = 1.0; 
-        msg.volume = 1.0; // Amplitud máxima para la Nave
-        
-        window.speechSynthesis.speak(msg);
-    }
-
-    function mostrarDetalle(tema) {
-        const info = narrativas[tema];
-        if(!info) return;
-
-        // 1. Actualización Visual del Módulo
-        document.getElementById('main-header').innerText = `MODULE: ${tema.toUpperCase()}`;
-        document.getElementById('main-content').style.display = 'none';
-        const detalle = document.getElementById('detalle-ia');
-        detalle.style.display = 'block';
-        detalle.innerText = info.txt;
-
-        // 2. Ejecución de Voz Kimi corregida
-        hablarKimi(info.voz);
-        console.log("🧬 Kimi Voice Triggered: " + tema);
-    }
-
-    // Desbloqueo de audio por interacción inicial del Arquitecto
-    window.addEventListener('click', () => {
-        const silent = new SpeechSynthesisUtterance('');
-        window.speechSynthesis.speak(silent);
-        console.log("🔊 Audio Engine Initialized - Kimi is Ready to speak.");
-    }, { once: true });
-</script>
-
+    </script>
 </body>
 </html>

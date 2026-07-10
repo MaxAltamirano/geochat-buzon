@@ -1,7 +1,6 @@
-# --- Ignorar node_modules en todos los niveles ---
+# --- Ignorar dependencias y entornos de compilación ---
 node_modules/
-
-# --- Ignorar configuraciones de paquetes ---
+dist/
 package-lock.json
 package.json
 
@@ -9,17 +8,22 @@ package.json
 geochat-movil
 main
 buzon_server
-//geochat-buzon
 *.log
 *.bak
 
-# --- Sistema ---
+# --- Sistema y versiones ---
 .git/
 .DS_Store
 
-# --- Archivos críticos permitidos ---
+# --- Archivos críticos permitidos (Protegidos de borrado) ---
 !cortex_context.json
 !cromosoma_memoria.json
 !medula_local.json
 !respuestas_kimi.json
 !sync_high_density.json
+
+# --- Asegurar que los componentes fuente se rastreen ---
+!index.html
+!cascarafrontendrender/
+!frontend/
+!src/
