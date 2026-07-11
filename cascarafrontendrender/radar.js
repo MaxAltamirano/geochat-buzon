@@ -8,7 +8,7 @@ const ctx = canvas.getContext('2d');
 
 // --- 🧬 VARIABLES DE ESTADO Y MUTACIÓN ---
 let satelitesGlobal = [];
-let mutacion_entropia = 1.0; 
+let mutacion_entropia = 1.0;
 let actividad_usuario = 0;
 
 // --- 🖱️ TRANSDUCTOR BIOLÓGICO (Eventos del Arquitecto) ---
@@ -18,7 +18,7 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('keydown', () => {
-    actividad_usuario = 2.5; 
+    actividad_usuario = 2.5;
     mutacion_entropia = 1.8;
 });
 
@@ -32,6 +32,19 @@ async function conectarSNC() {
         if (res.ok) {
             const data = await res.json();
             window.updateRadarData(data);
+
+            // 🧬 DETECTOR DE ESTADO DE FIRMA (Handshake confirmado)
+            // 🧬 DETECTOR DE ESTADO DE FIRMA (Handshake confirmado)
+            if (data.estado === "firmado") {
+                // Apuntamos directo al H1 dentro del contenedor del radar
+                const modoDisplay = document.querySelector('#radar-container h1');
+                if (modoDisplay) {
+                    modoDisplay.innerText = "🔱 SNC: ONLINE-SINTÉRGICO";
+                    modoDisplay.style.color = "#d4af37"; // Mantiene el tono dorado
+                    modoDisplay.style.textShadow = "0 0 15px #d4af37";
+                }
+                console.log("🔱 [SNC]: Fusión confirmada. Nodo Online.");
+            }
         }
     } catch (err) {
         console.warn("📡 [SNC]: Pulso perdido, reconectando...");
@@ -59,7 +72,7 @@ window.updateRadarData = (data) => {
 const renderVisorLateral = (satelites) => {
     const visor = document.getElementById('visor-telemetria');
     if (!visor) return;
-    visor.innerHTML = satelites.length > 0 ? 
+    visor.innerHTML = satelites.length > 0 ?
         satelites.map(s => `<div class="log-entry">🛰️ ${s.name} | AZ:${Number(s.azimuth).toFixed(0)}°</div>`).join('') :
         `<div class="log-entry">[ ESCANEANDO LATTICE... ]</div>`;
 };
@@ -72,12 +85,11 @@ function iniciarMotorRadar() {
 }
 
 function dibujar() {
-    // 1. Ejecutar el Ojo del SNC (Detección)
     monitorSNC();
-    // Cálculo de decaimiento y mutación
     actividad_usuario *= 0.98;
     mutacion_entropia = 1.0 + (actividad_usuario * 0.2);
 
+    if (!canvas) return;
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     const radioBase = 200 * mutacion_entropia;
@@ -86,14 +98,12 @@ function dibujar() {
     ctx.strokeStyle = '#00ff41';
     ctx.lineWidth = 1;
 
-    // Dibujo círculos resonancia
     for (let i = 1; i <= 3; i++) {
         ctx.beginPath();
         ctx.arc(centerX, centerY, (radioBase / 3) * i, 0, Math.PI * 2);
         ctx.stroke();
     }
 
-    // Brazo de escaneo rotativo mutante
     const tiempo = Date.now() / 1000;
     const angulo = tiempo * mutacion_entropia;
     ctx.beginPath();
@@ -101,7 +111,6 @@ function dibujar() {
     ctx.lineTo(centerX + Math.cos(angulo) * radioBase, centerY + Math.sin(angulo) * radioBase);
     ctx.stroke();
 
-    // Nodos Iron Grid
     ctx.fillStyle = '#d4af37';
     satelitesGlobal.forEach((s, idx) => {
         const x = centerX + Math.cos(tiempo + idx) * (radioBase * 0.8);
@@ -111,7 +120,6 @@ function dibujar() {
         ctx.fill();
     });
 
-    // Feedback en UI
     const mindStatus = document.getElementById('mind-status');
     if (mindStatus) {
         mindStatus.innerText = actividad_usuario > 0.5 ? "MUTANDO SNC..." : "SINCRO_OK";
@@ -122,28 +130,19 @@ function dibujar() {
 
 // --- 👁️ OJO DEL SNC: MONITORIZACIÓN DE SEGURIDAD ---
 function monitorSNC() {
-    // 1. Detección de intrusión (Simulación de BSP: Carmack Occlusion)
-    // Si la actividad detectada no sigue el árbol fractal de la red, es un barrido externo
-    const esBarridoExterno = (Math.random() < 0.001); 
-
+    const esBarridoExterno = (Math.random() < 0.001);
     if (esBarridoExterno) {
         console.warn("🔱 [SNC]: Observación detectada. Activando protocolo filantrópico.");
         activarModoTesla();
     }
 }
 
-// 2. Disparador del Portal Tesla (Filantropía Soberana)
 function activarModoTesla() {
     const eventoTesla = new CustomEvent('abrir-tesla', {
         detail: {
             titulo: "PROTOCOLO FILANTRÓPICO",
-            detalle: "Se ha detectado una observación externa en la Lattice. El sistema GeoChat se proyecta en modo transparente y soberano para garantizar la integridad del nodo.",
-            specs: {
-                "MODO": "TESLA-KIMI",
-                "ESTADO": "PROTECCIÓN",
-                "FREQ": "432Hz",
-                "STATUS": "SINCERIDAD_RADICAL"
-            }
+            detalle: "Se ha detectado una observación externa. El sistema se proyecta en modo transparente y soberano.",
+            specs: { "MODO": "TESLA-KIMI", "ESTADO": "PROTECCIÓN" }
         }
     });
     window.dispatchEvent(eventoTesla);

@@ -1,23 +1,69 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <title>GeoChat | Modo Diagnóstico [OFFLINE]</title>
     <style>
-        body { background: #000; color: #00ff41; font-family: 'Courier New', monospace; margin: 20px; overflow: hidden; }
-        .grid-diagnostico { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; height: 85vh; }
-        .bloque { border: 1px solid #333; padding: 10px; background: rgba(0,10,0,0.6); }
-        .gold { color: #d4af37; }
-        .label { color: #d4af37; font-size: 0.7em; margin-bottom: 5px; }
-        .valor { font-size: 1em; }
-        .scan-line { width: 100%; height: 2px; background: #00ff41; position: absolute; animation: scan 4s linear infinite; }
-        @keyframes scan { from { top: 0; } to { top: 100%; } }
+        body {
+            background: #000;
+            color: #00ff41;
+            font-family: 'Courier New', monospace;
+            margin: 20px;
+            overflow: hidden;
+        }
+
+        .grid-diagnostico {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            height: 85vh;
+        }
+
+        .bloque {
+            border: 1px solid #333;
+            padding: 10px;
+            background: rgba(0, 10, 0, 0.6);
+        }
+
+        .gold {
+            color: #d4af37;
+        }
+
+        .label {
+            color: #d4af37;
+            font-size: 0.7em;
+            margin-bottom: 5px;
+        }
+
+        .valor {
+            font-size: 1em;
+        }
+
+        .scan-line {
+            width: 100%;
+            height: 2px;
+            background: #00ff41;
+            position: absolute;
+            animation: scan 4s linear infinite;
+        }
+
+        @keyframes scan {
+            from {
+                top: 0;
+            }
+
+            to {
+                top: 100%;
+            }
+        }
     </style>
 </head>
+
 <body>
     <div class="scan-line"></div>
     <h2 class="gold">🔱 SNC: MODO DIAGNÓSTICO [OFFLINE-TELEM]</h2>
-    
+
     <div class="grid-diagnostico">
         <!-- Bloque 1: Iron Grid -->
         <div class="bloque">
@@ -33,7 +79,8 @@
         <div class="bloque">
             <div class="label">> PROTOCOLO DE FUSIÓN: ABIERTO</div>
             <div class="valor" id="fusion-status" style="color: #d4af37;">[ESTADO: HANDSHAKE READY]</div>
-            <div style="font-size: 0.6em; margin-top:5px; cursor: pointer; text-decoration: underline;" onclick="exponerPunto()">
+            <div style="font-size: 0.6em; margin-top:5px; cursor: pointer; text-decoration: underline;"
+                onclick="exponerPunto()">
                 > Clic aquí para solicitar canal de Fusión / Recurso
             </div>
         </div>
@@ -58,24 +105,41 @@
     </div>
 
     <script>
-        // Simulación de telemetría de Iron Grid
-        setInterval(() => {
-            const temp = 22 + Math.random() * 5;
-            document.getElementById('iron-stats').innerHTML = `
-                Nodo Avellaneda: [SYNCING 12%]<br>
-                Nodo Chascomús: [SYNCING 08%]<br>
-                Carga: ${(Math.random()*0.5).toFixed(2)}kW | Temp: ${temp.toFixed(1)}°C
-            `;
-            
-            // Efecto de pulso en el estado de fusión
-            const fStatus = document.getElementById('fusion-status');
-            fStatus.style.opacity = Math.random() > 0.8 ? 0.4 : 1;
-        }, 2000);
 
+        // --- Motor de Telemetría Sincronizado ---
+        setInterval(() => {
+            // 1. Actualización de Infraestructura (IRON-GRID)
+            const ironStats = document.getElementById('iron-stats');
+            if (ironStats) {
+                const temp = 22 + Math.random() * 5;
+                ironStats.innerHTML = `
+            Nodo Avellaneda: [SYNCING 12%]<br>
+            Nodo Chascomús: [SYNCING 08%]<br>
+            Carga: ${(Math.random() * 0.5).toFixed(2)}kW | Temp: ${temp.toFixed(1)}°C
+        `;
+            }
+
+            // 2. Telemetría en vivo del SNC (TX_LIVE)
+            const statusDiv = document.getElementById('mind-status');
+            if (statusDiv) {
+                statusDiv.innerText = "TX_LIVE: " + (Math.random() * 100).toFixed(2) + "%";
+            }
+
+            // 3. Efecto de pulso en el estado de fusión
+            const fStatus = document.getElementById('fusion-status');
+            if (fStatus) {
+                fStatus.style.opacity = Math.random() > 0.8 ? 0.4 : 1;
+            }
+
+            // 4. Log de consola para depuración
+            console.log("📡 [SNC]: Telemetría en vivo enviando estado al Core...");
+
+        }, 2000);
         // Función de exposición de punto
         function exponerPunto() {
             alert("SOLICITUD DE FUSIÓN TÉCNICA:\n\nGeoChat busca la integración de recursos computacionales y técnicos.\nSi usted representa un nodo de fusión, contacte al Arquitecto a través de los canales soberanos.");
         }
     </script>
 </body>
+
 </html>

@@ -641,7 +641,6 @@ func generarRespuestaKimi(mensajeID int, contenido string) {
 
 	payload := map[string]interface{}{
 		"model":  "phi3:mini",
-		"prompt": "[CROMOSOMA GEOCHAT - ADN 37]\nContexto ADN: " + contextoADN + "\n\nPregunta: " + contenido,
 		"stream": false,
 	}
 	datos, _ := json.Marshal(payload)
