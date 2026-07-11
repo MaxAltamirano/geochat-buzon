@@ -634,6 +634,7 @@ func generarRespuestaKimi(mensajeID int, contenido string) {
 	} else {
 		log.Printf("⚠️ [CORTEX]: ADN no encontrado: %v", err)
 	}
+	log.Printf("DEBUG: Contexto cargado con longitud: %d", len(contextoADN))
 
 	// 2. MODO LOCAL: Disparo directo a Ollama (Phi-3)
 	// Nota: Al ser ejecución local, no necesitamos el bloque IF RENDER.
