@@ -1,192 +1,54 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
-    <script type="module" src="./cascarafrontendrender/radar.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>GeoChat | Sistema Nervioso Central</title>
     <style>
-        /* Estética Soberana y Capas */
-        body,
-        html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: #000;
-            font-family: 'Courier New', monospace;
-        }
+        :root { --gold: #d4af37; --neon: #00ff41; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+        .gold { color: var(--gold); text-shadow: 0 0 10px var(--gold); }
+        .neon { color: var(--neon); text-shadow: 0 0 10px var(--neon); }
+        .capa { position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: none; transition: opacity 1.5s ease-in-out; z-index: 1; }
+        .oculto { opacity: 0; pointer-events: none; }
+        .visible { opacity: 1; pointer-events: auto; z-index: 10; }
 
-        .gold {
-            color: #d4af37;
-            text-shadow: 0 0 10px #d4af37;
-        }
-
-        .neon {
-            color: #00ff41;
-            text-shadow: 0 0 10px #00ff41;
-        }
-
-        .capa {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border: none;
-            transition: opacity 1.5s ease-in-out;
-            z-index: 1;
-        }
-
-        .oculto {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .visible {
-            opacity: 1;
-            pointer-events: auto;
-            z-index: 10;
-        }
-
-        /* Modal y Válvula */
-        #modal-movil {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.98);
-            z-index: 5000;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 20px;
-        }
-
-        .box-comando {
-            background: #111;
-            border: 1px solid #d4af37;
-            padding: 15px;
-            margin: 15px 0;
-            font-size: 11px;
-            color: #00ff41;
-            width: 90%;
-            word-break: break-all;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-
-        #valvula-escape {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            cursor: pointer;
-            z-index: 2000;
-            transition: all 0.5s ease;
-            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
-            border: 1px solid rgba(212, 175, 55, 0.3);
-        }
-
-        .pelos {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            border-top: 2px solid #d4af37;
-            animation: girar-pelos 1s linear infinite;
-        }
-
-        @keyframes girar-pelos {
-            from {
-                transform: rotate(0deg) scale(1);
-            }
-
-            to {
-                transform: rotate(360deg) scale(1.1);
-            }
-        }
-
-        .log-entry {
-            color: #00ff41;
-            font-size: 10px;
-            padding: 8px;
-            text-align: center;
-            animation: pulse-green 2s infinite;
-        }
-
-
-        /* Clase para el estado Online (Dorado) */
-        .estado-online {
-            color: #d4af37 !important;
-            text-shadow: 0 0 15px #d4af37;
-        }
-
-        /* Clase para el modo Tesla (Transparencia) */
-        .modo-tesla {
-            opacity: 0.3;
-            /* El sistema se vuelve "fantasma" */
-            filter: blur(2px);
-            transition: opacity 1s ease;
-        }
-
-        @keyframes pulse-green {
-            0% {
-                opacity: 0.5;
-            }
-
-            50% {
-                opacity: 1;
-            }
-
-            100% {
-                opacity: 0.5;
-            }
-        }
+        #modal-movil { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.98); z-index: 5000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+        .box-comando { background: #111; border: 1px solid var(--gold); padding: 15px; margin: 15px 0; font-size: 12px; color: var(--neon); width: 90%; word-break: break-all; border-radius: 5px; cursor: pointer; }
+        
+        #valvula-escape { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; border-radius: 50%; cursor: pointer; z-index: 2000; transition: all 0.5s ease; box-shadow: 0 0 20px rgba(0, 255, 65, 0.2); border: 1px solid rgba(212, 175, 55, 0.3); }
+        .pelos { position: absolute; width: 100%; height: 100%; border-radius: 50%; border-top: 2px solid var(--gold); animation: girar-pelos 1s linear infinite; }
+        @keyframes girar-pelos { from { transform: rotate(0deg) scale(1); } to { transform: rotate(360deg) scale(1.1); } }
+        
+        .log-entry { color: var(--neon); font-size: 10px; padding: 8px; text-align: center; animation: pulse-green 2s infinite; }
+        .estado-online { color: var(--gold) !important; text-shadow: 0 0 15px var(--gold); }
+        .modo-tesla { opacity: 0.3; filter: blur(2px); transition: opacity 1s ease; }
+        @keyframes pulse-green { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
     </style>
 </head>
-
 <body>
 
     <div id="modal-movil">
         <h2 class="gold">🔱 NODO MÓVIL</h2>
         <p style="color: #fff; font-size: 0.85em;">Ejecutá este comando en Termux:</p>
-        <div class="box-comando" id="cmd-text" onclick="copiarComando()">
-            curl -sL https://geochat-buzon.onrender.com/despertar.sh | bash
-        </div>
-        <button onclick="cerrarInyeccion()"
-            style="background: none; border: 1px solid #444; color: #888; padding: 10px; cursor: pointer; font-size: 0.8em;">[
-            Continuar al Radar ]</button>
+        <div class="box-comando" id="cmd-text" onclick="copiarComando()">curl -sL https://geochat-buzon.onrender.com/despertar.sh | bash</div>
+        <button onclick="cerrarInyeccion()" style="background: none; border: 1px solid #444; color: #888; padding: 10px; cursor: pointer; font-size: 0.8em;">[ Continuar al Radar ]</button>
         <p id="copy-status" style="margin-top: 10px; font-size: 0.75em;" class="neon"></p>
     </div>
 
     <iframe id="capa-offline" src="/cascarafrontendrender/nave-offline.html" class="capa visible"></iframe>
 
     <div id="capa-online" class="capa oculto">
-        <div id="capa-online-flex"
-            style="display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100vw; height: 100vh; padding: 20px; box-sizing: border-box;">
-            <div id="nucleo-inteligente" style="flex: 2; display: flex; justify-content: center; align-items: center;">
-                <div id="tesla-portal-host"></div>
-            </div>
-            <div id="visor-telemetria"
-                style="flex: 0 0 280px; height: 80vh; overflow-y: auto; background: rgba(0, 10, 0, 0.9); border: 1px solid #00ff41; padding: 10px; border-radius: 4px; margin-right: 20px;">
+        <div id="capa-online-flex" style="display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100vw; height: 100vh; padding: 20px; box-sizing: border-box;">
+            <div id="nucleo-inteligente" style="flex: 2; display: flex; justify-content: center; align-items: center;"><div id="tesla-portal-host"></div></div>
+            <div id="visor-telemetria" style="flex: 0 0 280px; height: 80vh; overflow-y: auto; background: rgba(0, 10, 0, 0.9); border: 1px solid var(--neon); padding: 10px; border-radius: 4px; margin-right: 20px;">
                 <div class="log-entry">[ ESCANEANDO LATTICE... ]</div>
             </div>
-            <div id="radar-container"
-                style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <div id="radar-container" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                 <h1 class="gold" style="margin-bottom: 10px; letter-spacing: 1px;">🔱 RESONANCIA 432Hz</h1>
                 <canvas id="radarCanvas" width="450" height="450"></canvas>
-                <div id="status-panel"
-                    style="width: 100%; max-width: 450px; background: rgba(0,20,0,0.95); padding: 12px; border: 1px solid #333; margin-top: 10px; border-radius: 4px;">
-                    <div style="color: #00ff41; font-size: 0.85em;"> > NODO: <span id="mind-status">SINCRO_OK</span>
-                    </div>
+                <div id="status-panel" style="width: 100%; max-width: 450px; background: rgba(0,20,0,0.95); padding: 12px; border: 1px solid #333; margin-top: 10px; border-radius: 4px;">
+                    <div style="color: var(--neon); font-size: 0.85em;"> > NODO: <span id="mind-status">SINCRO_OK</span></div>
                     <hr style="border: 0.5px solid rgba(255,255,255,0.1); margin: 8px 0;">
                     <div style="display: flex; justify-content: space-between; color: #fff; font-size: 0.8em;">
                         <span>SDR: <span id="sat-count" class="gold">0</span></span>
@@ -199,90 +61,48 @@
     </div>
 
     <div id="valvula-escape" onclick="location.reload()" title="Sincronizar ADN">
-        <div class="pelos"></div>
-        <div class="pelos" style="transform: rotate(60deg);"></div>
+        <div class="pelos"></div><div class="pelos" style="transform: rotate(60deg);"></div>
     </div>
 
-    <script src="/cascarafrontendrender/radar.js"></script>
+    <script type="module" src="./cascarafrontendrender/radar.js"></script>
     <script>
-        const modalMovil = document.getElementById('modal-movil');
-
-        /**
-
-        /**
-        * Monitoriza el pulso del sistema vía Buzón centralizado.
-        * Gestiona transiciones entre estados: ONLINE, MODO TESLA (Pispeo) y OFFLINE.
-        */
+        const API_URL = "https://geochat-buzon.onrender.com/api/estado-global";
+        
         async function monitorPulse() {
             try {
-                const res = await fetch("https://geochat-buzon.onrender.com/api/estado-global", {
-                    cache: "no-store",
-                    headers: { 'Accept': 'application/json' }
-                });
+                const response = await fetch(API_URL, { cache: "no-store" });
+                if (!response.ok) throw new Error("Offline");
+                const data = await response.json();
 
-                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-
-                const data = await res.json();
-
-                // 1. FUSIÓN ONLINE: Estado operativo estándar
-                if (data && data.status === "ONLINE") {
+                if (data.status === "ONLINE") {
                     document.body.classList.add('estado-online');
                     document.body.classList.remove('modo-tesla');
-
-                    console.log("✅ [SISTEMA]: Iron Grid en sintonía. Modo:", data.mode || "ACTIVO");
                     activarModoOnline();
-                }
-                // 2. MODO TESLA / PISPEO: Activamos transparencia/blur para ocultamiento soberano
-                else if (data && data.status === "TESLA_MODE") {
+                } else if (data.status === "TESLA_MODE") {
                     document.body.classList.add('modo-tesla');
                     document.body.classList.remove('estado-online');
-
-                    console.warn("🔱 [SNC]: Protocolo Filantrópico/Tesla activo. Sistema en modo transparente.");
-                    // Si el modo Tesla requiere que el radar siga funcionando pero invisible, no llamamos a forzarOffline()
+                } else {
+                    resetVisuals();
                 }
-                // 3. ESTADO OFFLINE: Limpieza total de clases y despliegue de nave-offline
-                else {
-                    document.body.classList.remove('estado-online', 'modo-tesla');
-                    console.warn("⚠️ [SISTEMA]: Buzón activo, pero Córtex reporta estado inactivo.");
-                    forzarOffline();
-                }
-
-            } catch (e) {
-                // Fallo crítico de red o Buzón inalcanzable
-                document.body.classList.remove('estado-online', 'modo-tesla');
-                console.log("📡 [SISTEMA]: Nodo en silencio. Modo offline activo.");
-                forzarOffline();
+            } catch {
+                resetVisuals();
             } finally {
-                // Mantenemos el ciclo vivo para la reconexión constante
                 setTimeout(monitorPulse, 5000);
             }
         }
 
-        /**
-         * Activa la capa Online y dispara la secuencia de arranque del SNC.
-        * Se asegura de limpiar el estado visual y activar el motor de radar.
-        */
+        function resetVisuals() {
+            document.body.classList.remove('estado-online', 'modo-tesla');
+            forzarOffline();
+        }
+
         function activarModoOnline() {
             const off = document.getElementById('capa-offline');
             const on = document.getElementById('capa-online');
-
-            // Verificamos que la capa offline esté activa antes de transicionar
-            if (off && on && off.classList.contains("visible")) {
-
-                // 1. Ocultar capa offline
+            if (off.classList.contains("visible")) {
                 off.classList.replace("visible", "oculto");
-
-                // 2. Mostrar capa online
                 on.classList.replace("oculto", "visible");
-
-                // 3. Inicialización del motor de telemetría (SNC)
-                if (typeof iniciarMotorRadar === 'function') {
-                    iniciarMotorRadar();
-                } else {
-                    console.warn("⚠️ [SNC]: Motor de radar no encontrado. Verifique carga de radar.js.");
-                }
-
-                console.log("🔱 [SNC]: Sistema Nervioso Central Online. Protocolo de Fusión Activo.");
+                if (window.iniciarMotorRadar) window.iniciarMotorRadar();
             }
         }
 
@@ -295,25 +115,21 @@
             }
         }
 
-        function detectarMovil() {
-            if (/Android/i.test(navigator.userAgent) && !sessionStorage.getItem('geochat_mobile_skip')) {
-                modalMovil.style.display = 'flex';
-            }
-        }
-
         function copiarComando() {
             navigator.clipboard.writeText(document.getElementById('cmd-text').innerText);
             document.getElementById('copy-status').innerText = "✅ COPIADO.";
         }
 
         function cerrarInyeccion() {
-            modalMovil.style.display = 'none';
+            document.getElementById('modal-movil').style.display = 'none';
             sessionStorage.setItem('geochat_mobile_skip', 'true');
         }
 
-        detectarMovil();
+        if (/Android/i.test(navigator.userAgent) && !sessionStorage.getItem('geochat_mobile_skip')) {
+            document.getElementById('modal-movil').style.display = 'flex';
+        }
+
         monitorPulse();
     </script>
 </body>
-
 </html>
