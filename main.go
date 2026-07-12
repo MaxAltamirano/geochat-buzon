@@ -14,7 +14,22 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	//"os/exec"
+	//"strings"
+	//"strconv"
 )
+
+// --- ESTRUCTURA DEL PULSO VITAL (TELEMETRÍA) ---
+type Telemetria struct {
+	Nodo  string  `json:"nodo"`
+	Temp  float64 `json:"temp"`
+	Load  float64 `json:"load"`
+	Input string  `json:"input_activity"`
+}
+
+// Variable global para guardar el último estado recibido
+var ultimaTelemetria Telemetria
+var muTelemetria sync.Mutex
 
 // --- ESTRUCTURA PARA EL BYPASS SOBERANO ---
 type Mensaje struct {
@@ -73,6 +88,28 @@ func main() {
 	log.Println("📁 [SISTEMA]: Carpeta ./storage lista y con permisos asegurados.")
 
 	log.Println("🧬 MÉDULA LOCAL: Operando con persistencia en disco.")
+
+	// --- MOTOR DE SENSADO CONTINUO ---
+	go func() {
+		for {
+			// Ejecutamos la función que estaba "sin usar"
+			actividad := obtenerActividadRaton()
+
+			// Creamos el paquete de telemetría
+			datos := Telemetria{
+				Nodo:  "Avellaneda",
+				Temp:  25.0, // Aquí podrías llamar a una función de lectura real
+				Load:  0.1,  // Aquí podrías llamar a una función de carga real
+				Input: actividad,
+			}
+
+			// Enviamos al sistema
+			actualizarEstadoTelemetria(datos)
+
+			// Frecuencia de muestreo (cada 5 segundos)
+			time.Sleep(5 * time.Second)
+		}
+	}()
 
 	// Crea un nuevo Mux
 	mux := http.NewServeMux()
@@ -281,6 +318,20 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	mux.HandleFunc("/api/telemetria", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		var datos Telemetria // Ya no dará error, porque ya declaramos el tipo Telemetria
+
+		if err := json.NewDecoder(r.Body).Decode(&datos); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		actualizarEstadoTelemetria(datos) // Ya no dará error, porque ya declaramos la función
+
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte("Telemetria recibida y procesada"))
+	}))
+
 	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -294,6 +345,20 @@ func main() {
 		Handler: mux,
 	}
 	log.Fatal(server.ListenAndServe())
+}
+
+// Captura actividad básica (ejemplo: detectar eventos en /dev/input)
+func obtenerActividadRaton() string {
+	// Simulación: en producción usarías un watcher de eventos de xinput
+	return "ACTIVE_SENSING"
+}
+
+func actualizarEstadoTelemetria(datos Telemetria) {
+	muTelemetria.Lock()
+	defer muTelemetria.Unlock()
+
+	ultimaTelemetria = datos
+	// Aquí podrías agregar lógica adicional, como guardar en un archivo o log
 }
 
 func agregarAlHistorial(m Mensaje) {
