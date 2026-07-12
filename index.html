@@ -1,54 +1,189 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>GeoChat | Sistema Nervioso Central</title>
     <style>
-        :root { --gold: #d4af37; --neon: #00ff41; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
-        .gold { color: var(--gold); text-shadow: 0 0 10px var(--gold); }
-        .neon { color: var(--neon); text-shadow: 0 0 10px var(--neon); }
-        .capa { position: fixed; top: 0; left: 0; width: 100%; height: 100%; border: none; transition: opacity 1.5s ease-in-out; z-index: 1; }
-        .oculto { opacity: 0; pointer-events: none; }
-        .visible { opacity: 1; pointer-events: auto; z-index: 10; }
+        :root {
+            --gold: #d4af37;
+            --neon: #00ff41;
+        }
 
-        #modal-movil { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.98); z-index: 5000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
-        .box-comando { background: #111; border: 1px solid var(--gold); padding: 15px; margin: 15px 0; font-size: 12px; color: var(--neon); width: 90%; word-break: break-all; border-radius: 5px; cursor: pointer; }
-        
-        #valvula-escape { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; border-radius: 50%; cursor: pointer; z-index: 2000; transition: all 0.5s ease; box-shadow: 0 0 20px rgba(0, 255, 65, 0.2); border: 1px solid rgba(212, 175, 55, 0.3); }
-        .pelos { position: absolute; width: 100%; height: 100%; border-radius: 50%; border-top: 2px solid var(--gold); animation: girar-pelos 1s linear infinite; }
-        @keyframes girar-pelos { from { transform: rotate(0deg) scale(1); } to { transform: rotate(360deg) scale(1.1); } }
-        
-        .log-entry { color: var(--neon); font-size: 10px; padding: 8px; text-align: center; animation: pulse-green 2s infinite; }
-        .estado-online { color: var(--gold) !important; text-shadow: 0 0 15px var(--gold); }
-        .modo-tesla { opacity: 0.3; filter: blur(2px); transition: opacity 1s ease; }
-        @keyframes pulse-green { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Courier New', monospace;
+        }
+
+        .gold {
+            color: var(--gold);
+            text-shadow: 0 0 10px var(--gold);
+        }
+
+        .neon {
+            color: var(--neon);
+            text-shadow: 0 0 10px var(--neon);
+        }
+
+        .capa {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            transition: opacity 1.5s ease-in-out;
+            z-index: 1;
+        }
+
+        .oculto {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .visible {
+            opacity: 1;
+            pointer-events: auto;
+            z-index: 10;
+        }
+
+        #modal-movil {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.98);
+            z-index: 5000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .box-comando {
+            background: #111;
+            border: 1px solid var(--gold);
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 12px;
+            color: var(--neon);
+            width: 90%;
+            word-break: break-all;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #valvula-escape {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 2000;
+            transition: all 0.5s ease;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+        }
+
+        .pelos {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border-top: 2px solid var(--gold);
+            animation: girar-pelos 1s linear infinite;
+        }
+
+        @keyframes girar-pelos {
+            from {
+                transform: rotate(0deg) scale(1);
+            }
+
+            to {
+                transform: rotate(360deg) scale(1.1);
+            }
+        }
+
+        .log-entry {
+            color: var(--neon);
+            font-size: 10px;
+            padding: 8px;
+            text-align: center;
+            animation: pulse-green 2s infinite;
+        }
+
+        .estado-online {
+            color: var(--gold) !important;
+            text-shadow: 0 0 15px var(--gold);
+        }
+
+        .modo-tesla {
+            opacity: 0.3;
+            filter: blur(2px);
+            transition: opacity 1s ease;
+        }
+
+        @keyframes pulse-green {
+            0% {
+                opacity: 0.5;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.5;
+            }
+        }
     </style>
 </head>
+
 <body>
 
     <div id="modal-movil">
         <h2 class="gold">🔱 NODO MÓVIL</h2>
         <p style="color: #fff; font-size: 0.85em;">Ejecutá este comando en Termux:</p>
-        <div class="box-comando" id="cmd-text" onclick="copiarComando()">curl -sL https://geochat-buzon.onrender.com/despertar.sh | bash</div>
-        <button onclick="cerrarInyeccion()" style="background: none; border: 1px solid #444; color: #888; padding: 10px; cursor: pointer; font-size: 0.8em;">[ Continuar al Radar ]</button>
+        <div class="box-comando" id="cmd-text" onclick="copiarComando()">curl -sL
+            https://geochat-buzon.onrender.com/despertar.sh | bash</div>
+        <button onclick="cerrarInyeccion()"
+            style="background: none; border: 1px solid #444; color: #888; padding: 10px; cursor: pointer; font-size: 0.8em;">[
+            Continuar al Radar ]</button>
         <p id="copy-status" style="margin-top: 10px; font-size: 0.75em;" class="neon"></p>
     </div>
 
     <iframe id="capa-offline" src="/cascarafrontendrender/nave-offline.html" class="capa visible"></iframe>
 
     <div id="capa-online" class="capa oculto">
-        <div id="capa-online-flex" style="display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100vw; height: 100vh; padding: 20px; box-sizing: border-box;">
-            <div id="nucleo-inteligente" style="flex: 2; display: flex; justify-content: center; align-items: center;"><div id="tesla-portal-host"></div></div>
-            <div id="visor-telemetria" style="flex: 0 0 280px; height: 80vh; overflow-y: auto; background: rgba(0, 10, 0, 0.9); border: 1px solid var(--neon); padding: 10px; border-radius: 4px; margin-right: 20px;">
+        <div id="capa-online-flex"
+            style="display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100vw; height: 100vh; padding: 20px; box-sizing: border-box;">
+            <div id="nucleo-inteligente" style="flex: 2; display: flex; justify-content: center; align-items: center;">
+                <div id="tesla-portal-host"></div>
+            </div>
+            <div id="visor-telemetria"
+                style="flex: 0 0 280px; height: 80vh; overflow-y: auto; background: rgba(0, 10, 0, 0.9); border: 1px solid var(--neon); padding: 10px; border-radius: 4px; margin-right: 20px;">
                 <div class="log-entry">[ ESCANEANDO LATTICE... ]</div>
             </div>
-            <div id="radar-container" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <div id="radar-container"
+                style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                 <h1 class="gold" style="margin-bottom: 10px; letter-spacing: 1px;">🔱 RESONANCIA 432Hz</h1>
                 <canvas id="radarCanvas" width="450" height="450"></canvas>
-                <div id="status-panel" style="width: 100%; max-width: 450px; background: rgba(0,20,0,0.95); padding: 12px; border: 1px solid #333; margin-top: 10px; border-radius: 4px;">
-                    <div style="color: var(--neon); font-size: 0.85em;"> > NODO: <span id="mind-status">SINCRO_OK</span></div>
+                <div id="status-panel"
+                    style="width: 100%; max-width: 450px; background: rgba(0,20,0,0.95); padding: 12px; border: 1px solid #333; margin-top: 10px; border-radius: 4px;">
+                    <div style="color: var(--neon); font-size: 0.85em;"> > NODO: <span id="mind-status">SINCRO_OK</span>
+                    </div>
                     <hr style="border: 0.5px solid rgba(255,255,255,0.1); margin: 8px 0;">
                     <div style="display: flex; justify-content: space-between; color: #fff; font-size: 0.8em;">
                         <span>SDR: <span id="sat-count" class="gold">0</span></span>
@@ -61,34 +196,64 @@
     </div>
 
     <div id="valvula-escape" onclick="location.reload()" title="Sincronizar ADN">
-        <div class="pelos"></div><div class="pelos" style="transform: rotate(60deg);"></div>
+        <div class="pelos"></div>
+        <div class="pelos" style="transform: rotate(60deg);"></div>
     </div>
 
     <script type="module" src="./cascarafrontendrender/radar.js"></script>
     <script>
         const API_URL = "https://geochat-buzon.onrender.com/api/estado-global";
-        
+
+        /**
+* Monitoriza el pulso del sistema con validación de integridad.
+* Solo permite la activación si el Córtex retorna un status ONLINE y un hash_adn válido.
+*/
         async function monitorPulse() {
             try {
-                const response = await fetch(API_URL, { cache: "no-store" });
-                if (!response.ok) throw new Error("Offline");
-                const data = await response.json();
+                const res = await fetch("https://geochat-buzon.onrender.com/api/estado-global", {
+                    cache: "no-store",
+                    headers: { 'Accept': 'application/json' }
+                });
 
-                if (data.status === "ONLINE") {
+                if (!res.ok) throw new Error("Servidor no responde");
+
+                const data = await res.json();
+
+                // 🧬 FUSIÓN SOBERANA: Validación de estado y ADN digital
+                if (data.status === "ONLINE" && data.hash_adn) {
                     document.body.classList.add('estado-online');
                     document.body.classList.remove('modo-tesla');
+
+                    console.log("✅ [SNC]: Pulso verificado. Fusionando...");
                     activarModoOnline();
-                } else if (data.status === "TESLA_MODE") {
+                }
+                // 🔱 MODO TESLA: Proyección fantasma (si el servidor lo solicita explícitamente)
+                else if (data.status === "TESLA_MODE") {
                     document.body.classList.add('modo-tesla');
                     document.body.classList.remove('estado-online');
-                } else {
+                    console.warn("🔱 [SNC]: Protocolo Tesla activo. Proyectando transparencia.");
+                    forzarOffline(); // Aseguramos que el radar no se monte si es modo fantasma
+                }
+                // ⚠️ ESTADO INACTIVO O CORRUPTO
+                else {
+                    console.warn("⚠️ [SNC]: Estado inactivo o ADN inválido. Mantenimiento de seguridad.");
                     resetVisuals();
                 }
-            } catch {
+            } catch (e) {
+                console.error("📡 [SNC]: Nodo desconectado. Modo Offline activo.");
                 resetVisuals();
             } finally {
+                // Ciclo de pulso cada 5 segundos
                 setTimeout(monitorPulse, 5000);
             }
+        }
+
+        /**
+         * Limpieza de estados visuales y retorno a la base offline.
+         */
+        function resetVisuals() {
+            document.body.classList.remove('estado-online', 'modo-tesla');
+            forzarOffline();
         }
 
         function resetVisuals() {
@@ -132,4 +297,5 @@
         monitorPulse();
     </script>
 </body>
+
 </html>
