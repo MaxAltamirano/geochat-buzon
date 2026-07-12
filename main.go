@@ -57,9 +57,9 @@ const archivoPersistencia = "medula_local.json"
 
 // --- VARIABLES GLOBALES DE ESTADO ---
 var (
-	mensajes = []MensajePendiente{}
-	mu       sync.Mutex // Bloqueo para operaciones seguras
-
+	mensajes         = []MensajePendiente{}
+	mu               sync.Mutex // Bloqueo para operaciones seguras
+	ultimoPulsoLocal time.Time
 )
 
 func main() {
@@ -246,20 +246,39 @@ func main() {
 		w.(http.Flusher).Flush() // Fuerza el envío inmediato
 	}))
 
-	// --- RUTA DE SINCRONÍA GLOBAL (ESTADO CORTEX) ---
+	// En el main, modifica el handler /api/estado-global:
 	mux.HandleFunc("/api/estado-global", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		// 1. Verificamos salud del ADN (esto ya lo tienes en verificarADN)
-		// 2. Comprobamos si el sistema está operando
+		mu.Lock()
+		// Si el último pulso tiene más de 15 segundos, el servidor local está desconectado
+		estaOnline := time.Since(ultimoPulsoLocal) < 15*time.Second
+		mu.Unlock()
+
+		// Lógica sustituta del operador ternario
+		var estadoFinal string
+		if estaOnline {
+			estadoFinal = "ONLINE"
+		} else {
+			estadoFinal = "OFFLINE"
+		}
+
 		data := map[string]interface{}{
-			"status":     "ONLINE", // El simple hecho de que esta API responda es el status
+			"status":     estadoFinal, // Usamos la variable definida arriba
 			"mode":       "IRON_GRID_ACTIVE",
 			"timestamp":  time.Now().Unix(),
-			"hash_adn":   "432-BETA-77", // Aquí podrías devolver el hash real si lo cargas de un archivo
+			"hash_adn":   "432-BETA-77",
 			"frecuencia": 432.169,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(data)
+	}))
+
+	// AGREGA ESTA NUEVA RUTA: Tu Linux local llamará a esto cada 5-10 segundos
+	mux.HandleFunc("/api/heartbeat", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		ultimoPulsoLocal = time.Now() // Actualizamos el timestamp cada vez que el local nos avisa
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
 	}))
 
 	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------

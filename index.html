@@ -218,32 +218,36 @@
                 if (!res.ok) throw new Error("Servidor no responde");
 
                 const data = await res.json();
+                const ahora = Math.floor(Date.now() / 1000);
 
-                // 🧬 FUSIÓN SOBERANA: Validación de estado y ADN digital
-                if (data.status === "ONLINE" && data.hash_adn) {
+                // Validación de frescura: El timestamp debe ser menor a 20s de antigüedad
+                const esFresco = (ahora - data.timestamp) < 20;
+
+                // 🧬 FUSIÓN SOBERANA: Validación de estado, ADN digital y frescura del pulso
+                if (data.status === "ONLINE" && data.hash_adn && esFresco) {
                     document.body.classList.add('estado-online');
                     document.body.classList.remove('modo-tesla');
 
-                    console.log("✅ [SNC]: Pulso verificado. Fusionando...");
+                    console.log("✅ [SNC]: Pulso verificado y fresco. Fusionando...");
                     activarModoOnline();
                 }
-                // 🔱 MODO TESLA: Proyección fantasma (si el servidor lo solicita explícitamente)
+                // 🔱 MODO TESLA: Proyección fantasma (modo filantrópico)
                 else if (data.status === "TESLA_MODE") {
                     document.body.classList.add('modo-tesla');
                     document.body.classList.remove('estado-online');
                     console.warn("🔱 [SNC]: Protocolo Tesla activo. Proyectando transparencia.");
-                    forzarOffline(); // Aseguramos que el radar no se monte si es modo fantasma
+                    forzarOffline();
                 }
-                // ⚠️ ESTADO INACTIVO O CORRUPTO
+                // ⚠️ ESTADO INACTIVO, CORRUPTO O LATENCIA EXCESIVA
                 else {
-                    console.warn("⚠️ [SNC]: Estado inactivo o ADN inválido. Mantenimiento de seguridad.");
-                    resetVisuals();
+                    console.warn("⚠️ [SNC]: Estado inactivo, ADN inválido o pulso antiguo. Mantenimiento de seguridad.");
+                    forzarOffline();
                 }
             } catch (e) {
                 console.error("📡 [SNC]: Nodo desconectado. Modo Offline activo.");
-                resetVisuals();
+                forzarOffline();
             } finally {
-                // Ciclo de pulso cada 5 segundos
+                // Ciclo de pulso cada 5 segundos para mantener la sincronización
                 setTimeout(monitorPulse, 5000);
             }
         }
