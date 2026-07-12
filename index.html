@@ -122,6 +122,21 @@
             animation: pulse-green 2s infinite;
         }
 
+
+        /* Clase para el estado Online (Dorado) */
+        .estado-online {
+            color: #d4af37 !important;
+            text-shadow: 0 0 15px #d4af37;
+        }
+
+        /* Clase para el modo Tesla (Transparencia) */
+        .modo-tesla {
+            opacity: 0.3;
+            /* El sistema se vuelve "fantasma" */
+            filter: blur(2px);
+            transition: opacity 1s ease;
+        }
+
         @keyframes pulse-green {
             0% {
                 opacity: 0.5;
@@ -192,29 +207,61 @@
     <script>
         const modalMovil = document.getElementById('modal-movil');
 
+        /**
+
+        /**
+        * Monitoriza el pulso del sistema vía Buzón centralizado.
+        * Gestiona transiciones entre estados: ONLINE, MODO TESLA (Pispeo) y OFFLINE.
+        */
         async function monitorPulse() {
             try {
-                const res = await fetch("https://geochat-buzon.onrender.com/api/radar-pulse", {
+                const res = await fetch("https://geochat-buzon.onrender.com/api/estado-global", {
                     cache: "no-store",
                     headers: { 'Accept': 'application/json' }
                 });
-                if (res.ok) {
-                    const d = await res.json();
-                    if (d && d.status === "Cortex Online") {
-                        console.log("✅ [SISTEMA]: Cortex verificado al inicio.");
-                        activarModoOnline();
-                    }
-                } else { forzarOffline(); }
+
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
+                const data = await res.json();
+
+                // 1. FUSIÓN ONLINE: Estado operativo estándar
+                if (data && data.status === "ONLINE") {
+                    document.body.classList.add('estado-online');
+                    document.body.classList.remove('modo-tesla');
+
+                    console.log("✅ [SISTEMA]: Iron Grid en sintonía. Modo:", data.mode || "ACTIVO");
+                    activarModoOnline();
+                }
+                // 2. MODO TESLA / PISPEO: Activamos transparencia/blur para ocultamiento soberano
+                else if (data && data.status === "TESLA_MODE") {
+                    document.body.classList.add('modo-tesla');
+                    document.body.classList.remove('estado-online');
+
+                    console.warn("🔱 [SNC]: Protocolo Filantrópico/Tesla activo. Sistema en modo transparente.");
+                    // Si el modo Tesla requiere que el radar siga funcionando pero invisible, no llamamos a forzarOffline()
+                }
+                // 3. ESTADO OFFLINE: Limpieza total de clases y despliegue de nave-offline
+                else {
+                    document.body.classList.remove('estado-online', 'modo-tesla');
+                    console.warn("⚠️ [SISTEMA]: Buzón activo, pero Córtex reporta estado inactivo.");
+                    forzarOffline();
+                }
+
             } catch (e) {
-                console.log("📡 [SISTEMA]: Esperando handshake inicial...");
+                // Fallo crítico de red o Buzón inalcanzable
+                document.body.classList.remove('estado-online', 'modo-tesla');
+                console.log("📡 [SISTEMA]: Nodo en silencio. Modo offline activo.");
                 forzarOffline();
+            } finally {
+                // Mantenemos el ciclo vivo para la reconexión constante
+                setTimeout(monitorPulse, 5000);
             }
         }
 
         /**
- * Activa la capa Online y dispara la secuencia de arranque del SNC.
- * Se asegura de limpiar el estado visual y activar el motor de radar.
- */
+         * Activa la capa Online y dispara la secuencia de arranque del SNC.
+        * Se asegura de limpiar el estado visual y activar el motor de radar.
+        */
         function activarModoOnline() {
             const off = document.getElementById('capa-offline');
             const on = document.getElementById('capa-online');

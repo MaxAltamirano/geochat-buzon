@@ -22,34 +22,58 @@ window.addEventListener('keydown', () => {
     mutacion_entropia = 1.8;
 });
 
-// --- 📡 CONEXIÓN SINTERGIAL (Polling al Cortex) ---
+
+/**
+ * 📡 CONEXIÓN SINTERGIAL (Polling al Cortex vía Buzón)
+ * DNA_ID: RADAR_JS_SNC_FUSION_FINAL
+ * Protocolo de verificación mediante Buzón (Render)
+ */
 async function conectarSNC() {
     try {
-        const res = await fetch("/api/radar-pulse", {
+        // Consultamos al Buzón central en Render para saber si el Córtex está vivo
+        const res = await fetch("https://geochat-buzon.onrender.com/api/estado-global", {
             cache: "no-store",
             headers: { 'Accept': 'application/json' }
         });
-        if (res.ok) {
-            const data = await res.json();
-            window.updateRadarData(data);
 
-            // 🧬 DETECTOR DE ESTADO DE FIRMA (Handshake confirmado)
-            // 🧬 DETECTOR DE ESTADO DE FIRMA (Handshake confirmado)
-            if (data.estado === "firmado") {
-                // Apuntamos directo al H1 dentro del contenedor del radar
-                const modoDisplay = document.querySelector('#radar-container h1');
-                if (modoDisplay) {
-                    modoDisplay.innerText = "🔱 SNC: ONLINE-SINTÉRGICO";
-                    modoDisplay.style.color = "#d4af37"; // Mantiene el tono dorado
-                    modoDisplay.style.textShadow = "0 0 15px #d4af37";
-                }
-                console.log("🔱 [SNC]: Fusión confirmada. Nodo Online.");
+        if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+
+        const data = await res.json();
+        const modoDisplay = document.querySelector('#radar-container h1');
+
+        // 🧬 LÓGICA DE FUSIÓN SOBERANA
+        if (data && data.status === "ONLINE") {
+            // Actualización de estado visual positivo
+            if (modoDisplay) {
+                modoDisplay.innerText = "🔱 SNC: ONLINE-SINTÉRGICO";
+                modoDisplay.style.color = "#d4af37";
+                modoDisplay.style.textShadow = "0 0 15px #d4af37";
             }
+            
+            // Inyección de datos al motor de renderizado
+            if (data.frecuencia || data.satelites) {
+                window.updateRadarData(data);
+            }
+            
+            console.log(`✅ [SISTEMA]: Iron Grid en sintonía. Estado: ${data.mode || 'ACTIVO'}`);
+        } else {
+            // Estado donde el Buzón responde pero el Córtex está en modo inactivo
+            console.warn("⚠️ [SISTEMA]: Buzón operativo, pero el Córtex local reporta inactividad.");
+            if (modoDisplay) modoDisplay.innerText = "🔱 SNC: STANDBY / SILENCIO";
         }
+
     } catch (err) {
-        console.warn("📡 [SNC]: Pulso perdido, reconectando...");
+        // Fallo de conexión o tiempo de espera
+        console.warn("📡 [SNC]: Pulso perdido. Intentando reconexión en el siguiente ciclo...");
+        const modoDisplay = document.querySelector('#radar-container h1');
+        if (modoDisplay) {
+            modoDisplay.innerText = "🔱 SNC: OFFLINE / BUSCANDO...";
+            modoDisplay.style.color = "#666";
+            modoDisplay.style.textShadow = "none";
+        }
     } finally {
-        setTimeout(conectarSNC, 3000);
+        // Ciclo de vida: 5 segundos de intervalo para mantener la latencia baja sin saturar la red
+        setTimeout(conectarSNC, 5000); 
     }
 }
 

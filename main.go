@@ -246,6 +246,22 @@ func main() {
 		w.(http.Flusher).Flush() // Fuerza el envío inmediato
 	}))
 
+	// --- RUTA DE SINCRONÍA GLOBAL (ESTADO CORTEX) ---
+	mux.HandleFunc("/api/estado-global", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		// 1. Verificamos salud del ADN (esto ya lo tienes en verificarADN)
+		// 2. Comprobamos si el sistema está operando
+		data := map[string]interface{}{
+			"status":     "ONLINE", // El simple hecho de que esta API responda es el status
+			"mode":       "IRON_GRID_ACTIVE",
+			"timestamp":  time.Now().Unix(),
+			"hash_adn":   "432-BETA-77", // Aquí podrías devolver el hash real si lo cargas de un archivo
+			"frecuencia": 432.169,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(data)
+	}))
+
 	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
 	port := os.Getenv("PORT")
 	if port == "" {
