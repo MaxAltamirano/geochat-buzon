@@ -208,6 +208,10 @@
 * Monitoriza el pulso del sistema con validación de integridad.
 * Solo permite la activación si el Córtex retorna un status ONLINE y un hash_adn válido.
 */
+        /**
+ * Monitoriza el pulso del sistema (SNC).
+ * Verifica la disponibilidad del Nodo, la integridad del ADN y la frescura del pulso.
+ */
         async function monitorPulse() {
             try {
                 const res = await fetch("https://geochat-buzon.onrender.com/api/estado-global", {
@@ -223,31 +227,35 @@
                 // Validación de frescura: El timestamp debe ser menor a 20s de antigüedad
                 const esFresco = (ahora - data.timestamp) < 20;
 
-                // 🧬 FUSIÓN SOBERANA: Validación de estado, ADN digital y frescura del pulso
+                console.log("✅ [SNC]: Pulso recibido. Verificando integridad...");
+
+                // 🧬 FUSIÓN SOBERANA: Nodo Online + ADN verificado + Pulso fresco
                 if (data.status === "ONLINE" && data.hash_adn && esFresco) {
                     document.body.classList.add('estado-online');
                     document.body.classList.remove('modo-tesla');
 
-                    console.log("✅ [SNC]: Pulso verificado y fresco. Fusionando...");
+                    console.log("🚀 [SNC]: Nodo conectado y ADN validado. Fusionando...");
                     activarModoOnline();
                 }
-                // 🔱 MODO TESLA: Proyección fantasma (modo filantrópico)
+                // 🔱 MODO TESLA: Proyección filantrópica activa
                 else if (data.status === "TESLA_MODE") {
                     document.body.classList.add('modo-tesla');
                     document.body.classList.remove('estado-online');
                     console.warn("🔱 [SNC]: Protocolo Tesla activo. Proyectando transparencia.");
                     forzarOffline();
                 }
-                // ⚠️ ESTADO INACTIVO, CORRUPTO O LATENCIA EXCESIVA
+                // ⚠️ ESTADO INACTIVO O CORRUPTO
                 else {
-                    console.warn("⚠️ [SNC]: Estado inactivo, ADN inválido o pulso antiguo. Mantenimiento de seguridad.");
+                    console.warn("⚠️ [SNC]: Estado inactivo, ADN inválido o latencia excesiva.");
                     forzarOffline();
                 }
+
             } catch (e) {
-                console.error("📡 [SNC]: Nodo desconectado. Modo Offline activo.");
+                // 📡 Nodo físicamente desconectado
+                console.error("📡 [SNC]: Nodo desconectado físicamente. Modo Offline activo.");
                 forzarOffline();
             } finally {
-                // Ciclo de pulso cada 5 segundos para mantener la sincronización
+                // Ciclo de pulso cada 5 segundos para mantener la sincronización constante
                 setTimeout(monitorPulse, 5000);
             }
         }
@@ -255,11 +263,7 @@
         /**
          * Limpieza de estados visuales y retorno a la base offline.
          */
-        function resetVisuals() {
-            document.body.classList.remove('estado-online', 'modo-tesla');
-            forzarOffline();
-        }
-
+        
         function resetVisuals() {
             document.body.classList.remove('estado-online', 'modo-tesla');
             forzarOffline();
