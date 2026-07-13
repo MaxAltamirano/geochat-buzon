@@ -284,13 +284,13 @@ func main() {
 	}))
 
 	// En el main, modifica el handler /api/estado-global:
+
 	mux.HandleFunc("/api/estado-global", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		// Si el último pulso tiene más de 15 segundos, el servidor local está desconectado
+		// Verificamos si el nodo local está emitiendo latidos (físicamente vivo)
 		estaOnline := time.Since(ultimoPulsoLocal) < 15*time.Second
 		mu.Unlock()
 
-		// Lógica sustituta del operador ternario
 		var estadoFinal string
 		if estaOnline {
 			estadoFinal = "ONLINE"
@@ -298,11 +298,12 @@ func main() {
 			estadoFinal = "OFFLINE"
 		}
 
+		// Estructura completa que satisface la validación de monitorPulse() en el frontend
 		data := map[string]interface{}{
-			"status":     estadoFinal, // Usamos la variable definida arriba
-			"mode":       "IRON_GRID_ACTIVE",
+			"status":     estadoFinal,
 			"timestamp":  time.Now().Unix(),
 			"hash_adn":   "432-BETA-77",
+			"mode":       "IRON_GRID_ACTIVE",
 			"frecuencia": 432.169,
 		}
 
