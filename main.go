@@ -333,14 +333,8 @@ func main() {
 		w.Write([]byte("Telemetria recibida y procesada"))
 	}))
 
-	// AGREGA ESTA NUEVA RUTA: Tu Linux local llamará a esto cada 5-10 segundos
-	mux.HandleFunc("/api/heartbeat", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		ultimoPulsoLocal = time.Now() // Actualizamos el timestamp cada vez que el local nos avisa
-		mu.Unlock()
-		w.WriteHeader(http.StatusOK)
-	}))
 	
+
 	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
 	port := os.Getenv("PORT")
 	if port == "" {
