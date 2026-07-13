@@ -136,8 +136,31 @@
 
         }, 2000);
         // Función de exposición de punto
-        function exponerPunto() {
-            alert("SOLICITUD DE FUSIÓN TÉCNICA:\n\nGeoChat busca la integración de recursos computacionales y técnicos.\nSi usted representa un nodo de fusión, contacte al Arquitecto a través de los canales soberanos.");
+        async function exponerPunto() {
+            // 1. Notificar al usuario que la Fusión está en proceso (en lugar del alert estático)
+            console.log("Iniciando Handshake de Fusión...");
+
+            try {
+                // 2. Disparar el handshake hacia el motor core
+                const response = await fetch('/api/fusión/solicitar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nodo: 'Avellaneda', timestamp: Date.now() })
+                });
+
+                const data = await response.json();
+
+                // 3. Evaluar respuesta del Buzón
+                if (data.status === "SUCCESS") {
+                    alert("Fusión exitosa: Nodo online y recursos integrados.");
+                    // Aquí forzarías el cambio visual en tu interfaz
+                    document.querySelector('#status').innerText = "ONLINE";
+                } else {
+                    alert("Fusión denegada: Discrepancia en el ADN del Cromosoma.");
+                }
+            } catch (error) {
+                console.error("Error de comunicación con el Buzón:", error);
+            }
         }
     </script>
 </body>
