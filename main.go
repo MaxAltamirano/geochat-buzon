@@ -288,7 +288,7 @@ func main() {
 	mux.HandleFunc("/api/estado-global", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		// Verificamos si el nodo local está emitiendo latidos (físicamente vivo)
-		estaOnline := time.Since(ultimoPulsoLocal) < 15*time.Second
+		estaOnline := time.Since(ultimoPulsoLocal) < 30*time.Second // Ampliado a 30s por seguridad
 		mu.Unlock()
 
 		var estadoFinal string
@@ -298,13 +298,20 @@ func main() {
 			estadoFinal = "OFFLINE"
 		}
 
-		// Estructura completa que satisface la validación de monitorPulse() en el frontend
+		// Estructura que satisface el radar.js
 		data := map[string]interface{}{
 			"status":     estadoFinal,
-			"timestamp":  time.Now().Unix(),
-			"hash_adn":   "432-BETA-77",
-			"mode":       "IRON_GRID_ACTIVE",
-			"frecuencia": 432.169,
+			"frecuencia": 432.17, // Valor numérico para radar
+			"satelites": []map[string]interface{}{
+				{
+					"name":    "NODO_AVELLANEDA",
+					"azimuth": 45,
+					"altitud": 0,
+				},
+			},
+			"timestamp": time.Now().Unix(),
+			"hash_adn":  "432-BETA-77",
+			"mode":      "IRON_GRID_ACTIVE",
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -332,8 +339,6 @@ func main() {
 		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte("Telemetria recibida y procesada"))
 	}))
-
-	
 
 	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
 	port := os.Getenv("PORT")
