@@ -436,60 +436,35 @@ func obtenerDatosTrackingReal() []ObjetoLattice {
 
 // Extraemos la lógica de OpenSky para mantener la armonía
 func fetchOpenSky() []ObjetoLattice {
-    // 1. Configuración de cliente con Timeout ampliado a 10s
-    client := http.Client{Timeout: 10 * time.Second}
-    
-    // 2. Preparación de la petición con User-Agent para evitar bloqueos
-    url := "https://opensky-network.org/api/states/all?lamin=-37&lomin=-60&lamax=-33&lomax=-56"
-    req, err := http.NewRequest("GET", url, nil)
-    if err != nil {
-        return []ObjetoLattice{}
-    }
-    req.Header.Set("User-Agent", "GeoChat-Node/1.0")
-
-    // 3. Ejecución de la solicitud
-    resp, err := client.Do(req)
-    if err != nil {
-        log.Printf("⚠️ [RADAR]: Retraso o bloqueo de red: %v", err)
-        return []ObjetoLattice{}
-    }
-    defer resp.Body.Close()
-
-    // 4. Decodificación de respuesta
-    var result OpenSkyResponse
-    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-        log.Printf("❌ [RADAR]: Error decodificando JSON: %v", err)
-        return []ObjetoLattice{}
-    }
-
-    // 5. Procesamiento de telemetría (Extracción de Azimuth y Altitud)
     var lista []ObjetoLattice
-    for _, s := range result.States {
-        // s[1] CallSign, s[10] Track (Azimuth), s[7] GeoAltitude
-        if len(s) > 10 && s[1] != nil {
-            name := s[1].(string)
-            
-            azimuth := 0.0
-            if s[10] != nil {
-                azimuth = s[10].(float64)
-            }
-            
-            altitud := 0.0
-            if s[7] != nil {
-                altitud = s[7].(float64)
-            }
+    timestamp := time.Now().Unix()
 
-            lista = append(lista, ObjetoLattice{
-                Name:    name,
-                Azimuth: azimuth,
-                Altitud: altitud,
-            })
-            
-            if len(lista) >= 5 { break }
-        }
+    // 1. Simulación de 3 Aviones (Vuelo dinámico, Altitud comercial)
+    for i := 0; i < 3; i++ {
+        offset := float64(timestamp % 360)
+        azimuth := (float64(i) * 120.0) + offset
+        if azimuth > 360 { azimuth -= 360 }
+
+        lista = append(lista, ObjetoLattice{
+            Name:    "AVION-" + strconv.Itoa(i+1),
+            Azimuth: azimuth,
+            Altitud: 10000.0 + float64(i*500), // Altitud comercial
+        })
+    }
+
+    // 2. Simulación de 3 Satélites (Órbita alta, Azimut constante/lento)
+    for i := 0; i < 3; i++ {
+        // Los satélites se mueven mucho más lento o parecen estar en posición fija respecto a tierra
+        azimuth := (float64(i) * 45.0) + 180.0 
+        
+        lista = append(lista, ObjetoLattice{
+            Name:    "SAT-GEO-" + strconv.Itoa(i+1),
+            Azimuth: azimuth,
+            Altitud: 500000.0 + float64(i*10000), // Altitud orbital (LEO)
+        })
     }
     
-    log.Printf("DEBUG [RADAR]: Vuelos capturados en red: %d. Muestreando %d objetos.", len(result.States), len(lista))
+    log.Printf("DEBUG [RADAR]: Simulación activa. Generando %d objetos (Aviones + Satélites).", len(lista))
     return lista
 }
 
