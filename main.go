@@ -20,6 +20,11 @@ import (
 	//"path/filepath"
 )
 
+
+type OpenSkyResponse struct {
+	States [][]interface{} `json:"states"`
+}
+
 type ObjetoLattice struct {
 	Name    string  `json:"name"`
 	Azimuth float64 `json:"azimuth"`
@@ -387,9 +392,75 @@ func main() {
 }
 
 func obtenerDatosTrackingReal() []ObjetoLattice {
-	// Aquí, en el futuro, realizarás el fetch a APIs externas.
-	// Por ahora retornamos un slice vacío para mantener la armonía.
-	return []ObjetoLattice{}
+	var lista []ObjetoLattice
+
+	// 1. Obtener Aviones (OpenSky)
+	urlAviones := "https://opensky-network.org/api/states/all?lamin=-35&lomin=-59&lamax=-34&lomax=-57"
+	client := http.Client{Timeout: 3 * time.Second}
+	
+	resp, err := client.Get(urlAviones)
+	if err == nil {
+		var result OpenSkyResponse
+		if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
+			for _, s := range result.States {
+				if s[1] != nil {
+					lista = append(lista, ObjetoLattice{
+						Name:    s[1].(string),
+						Azimuth: 0.0, // El radar lo posicionará dinámicamente
+						Altitud: 0,
+					})
+				}
+				if len(lista) >= 3 { break }
+			}
+		}
+		resp.Body.Close()
+	}
+
+	// 2. Obtener Satélites (ISS como referencia)
+	urlSats := "https://api.wheretheiss.at/v1/satellites/25544"
+	respSats, err := client.Get(urlSats)
+	if err == nil {
+		var iss struct {
+			Name      string  `json:"name"`
+			Longitude float64 `json:"longitude"`
+		}
+		if err := json.NewDecoder(respSats.Body).Decode(&iss); err == nil {
+			azimut := float64(int(iss.Longitude) % 360)
+			lista = append(lista, ObjetoLattice{
+				Name:    "ISS_SATELLITE",
+				Azimuth: azimut,
+				Altitud: 400,
+			})
+		}
+		respSats.Body.Close()
+	}
+
+	return lista
+}
+
+// Extraemos la lógica de OpenSky para mantener la armonía
+func fetchOpenSky() []ObjetoLattice {
+    url := "https://opensky-network.org/api/states/all?lamin=-35&lomin=-59&lamax=-34&lomax=-57"
+    client := http.Client{Timeout: 3 * time.Second}
+    resp, err := client.Get(url)
+    if err != nil { return []ObjetoLattice{} }
+    defer resp.Body.Close()
+
+    var result OpenSkyResponse
+    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { return []ObjetoLattice{} }
+
+    var lista []ObjetoLattice
+    for _, s := range result.States {
+        if len(s) > 1 && s[1] != nil {
+            lista = append(lista, ObjetoLattice{
+                Name:    s[1].(string),
+                Azimuth: 0.0, // El radar lo posicionará según el valor
+                Altitud: 0,
+            })
+            if len(lista) >= 3 { break }
+        }
+    }
+    return lista
 }
 
 // Captura actividad básica (ejemplo: detectar eventos en /dev/input)
