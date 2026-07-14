@@ -130,22 +130,27 @@ function dibujar() {
     // ... (código anterior igual) ...
 
     // 3. Renderizado de satélites
+    // --- 📡 MOTOR DE DIBUJO DE LA LATTICE ---
     satelitesGlobal.forEach((s) => {
+        // 1. Conversión de azimut a radianes (Ajuste de 90 grados para el norte real)
         const az = parseFloat(s.azimuth || 0);
         const rad = (az - 90) * (Math.PI / 180);
 
+        // 2. Cálculo de posición en el radar
         const x = centerX + Math.cos(rad) * (radioBase * 0.85);
         const y = centerY + Math.sin(rad) * (radioBase * 0.85);
 
-        // Punto del satélite
-        ctx.fillStyle = '#00ff41';
+        // 3. Renderizado del Nodo/Satélite
+        ctx.fillStyle = '#00ff41'; // Color verde neón soberano
         ctx.beginPath();
         ctx.arc(x, y, 4, 0, Math.PI * 2);
         ctx.fill();
 
-        // Etiqueta de nombre
-        ctx.fillStyle = '#fff';
+        // 4. Etiquetado dinámico
+        ctx.fillStyle = '#ffffff';
         ctx.font = '10px Courier New';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
         ctx.fillText(s.name || 'SAT', x + 8, y + 3);
     });
 
@@ -155,7 +160,7 @@ function dibujar() {
 // Llamar a esta función cuando los datos de satélites cambien
 // --- 📋 ACTUALIZADOR DE TELEMETRÍA ---
 // Variable global para persistencia de estado (debe ir fuera de la función)
-let estadoUltimo = ""; 
+let estadoUltimo = "";
 
 function actualizarVisorLateral(items) {
     const visor = document.getElementById('visor-telemetria');

@@ -20,6 +20,12 @@ import (
 	//"path/filepath"
 )
 
+type ObjetoLattice struct {
+	Name    string  `json:"name"`
+	Azimuth float64 `json:"azimuth"`
+	Altitud float64 `json:"altitud"`
+}
+
 // --- ESTRUCTURA DEL PULSO VITAL (TELEMETRÍA) ---
 type Telemetria struct {
 	Nodo  string  `json:"nodo"`
@@ -287,34 +293,39 @@ func main() {
 	// En el main, modifica el handler /api/estado-global:
 
 	mux.HandleFunc("/api/estado-global", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		// 1. Obtener estado de sincronización
 		mu.Lock()
-		// Detección automática: Si el pulso es menor a 30s, el nodo es parte de la red viva
 		estaOnline := time.Since(ultimoPulsoLocal) < 30*time.Second
 		mu.Unlock()
 
-		var estadoFinal string
-		if estaOnline {
-			estadoFinal = "ONLINE"
-		} else {
-			estadoFinal = "OFFLINE"
+		// 2. Inicializar Lattice con Nodo Base
+		listaSatelites := []ObjetoLattice{
+			{Name: "NODO_AVELLANEDA", Azimuth: 45, Altitud: 0},
 		}
 
-		// Estructura oficial para la sincronización con el radar
+		// 3. Inyección dinámica de telemetría externa
+		trackingData := obtenerDatosTrackingReal()
+		if len(trackingData) > 0 {
+			listaSatelites = append(listaSatelites, trackingData...)
+		}
+
+		// 4. Resolver estado operativo
+		estadoFinal := "OFFLINE"
+		if estaOnline {
+			estadoFinal = "ONLINE"
+		}
+
+		// 5. Compilar paquete de datos oficial
 		data := map[string]interface{}{
 			"status":     estadoFinal,
 			"frecuencia": 432.17,
-			"satelites": []map[string]interface{}{
-				{
-					"name":    "NODO_AVELLANEDA",
-					"azimuth": 45,
-					"altitud": 0,
-				},
-			},
-			"timestamp": time.Now().Unix(),
-			"hash_adn":  "432-BETA-77",
-			"mode":      "IRON_GRID_ACTIVE",
+			"satelites":  listaSatelites,
+			"timestamp":  time.Now().Unix(),
+			"hash_adn":   "432-BETA-77",
+			"mode":       "IRON_GRID_ACTIVE",
 		}
 
+		// 6. Transmisión
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(data)
 	}))
@@ -373,6 +384,12 @@ func main() {
 		Handler: mux,
 	}
 	log.Fatal(server.ListenAndServe())
+}
+
+func obtenerDatosTrackingReal() []ObjetoLattice {
+	// Aquí, en el futuro, realizarás el fetch a APIs externas.
+	// Por ahora retornamos un slice vacío para mantener la armonía.
+	return []ObjetoLattice{}
 }
 
 // Captura actividad básica (ejemplo: detectar eventos en /dev/input)
