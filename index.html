@@ -179,11 +179,12 @@
         <div id="capa-online-flex"
             style="display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100vw; height: 100vh; gap: 20px; padding: 20px;">
             <!-- Panel Izquierdo: Nodo Avellaneda + Telemetría integrada -->
+
             <div id="panel-izquierdo"
-                style="width: 350px; height: 80vh; border: 1px solid var(--neon); padding: 15px; background: rgba(0, 10, 0, 0.9);">
-                <h2 class="gold">🔱 NODO_AVELLANEDA</h2>
-                <div id="visor-telemetria" style="height: 90%; overflow-y: auto;">
-                    <!-- Aquí inyectaremos los satélites -->
+                style="width: 350px; height: 80vh; border: 1px solid var(--neon); padding: 15px; background: rgba(0, 10, 0, 0.9); display: flex; flex-direction: column;">
+                <h2 class="gold" style="margin-top: 0;">🔱 NODO_AVELLANEDA</h2>
+                <div id="visor-telemetria" style="flex-grow: 1; overflow-y: auto;">
+                    <!-- Los datos irán aquí abajo -->
                 </div>
             </div>
 

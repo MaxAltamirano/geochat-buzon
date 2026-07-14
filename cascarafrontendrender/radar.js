@@ -96,9 +96,9 @@ function dibujar() {
         requestAnimationFrame(dibujar);
         return;
     }
-    
+
     // Amortiguación de Entropía
-    actividad_usuario *= 0.95; 
+    actividad_usuario *= 0.95;
     mutacion_entropia = 1.0 + Math.min(actividad_usuario * 0.1, 0.5);
 
     const centerX = canvas.width / 2;
@@ -106,7 +106,7 @@ function dibujar() {
     const radioBase = 200;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     // 1. Anillos de resonancia
     ctx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
     ctx.lineWidth = 0.5;
@@ -126,21 +126,23 @@ function dibujar() {
     ctx.lineTo(centerX + Math.cos(anguloBrazo) * radioBase, centerY + Math.sin(anguloBrazo) * radioBase);
     ctx.stroke();
 
+    // --- 🎨 MOTOR DE RENDERIZADO (Sección de Satélites) ---
+    // ... (código anterior igual) ...
+
     // 3. Renderizado de satélites
     satelitesGlobal.forEach((s) => {
-        // Conversión a radianes (ajustado a -90° para alineación Norte)
         const az = parseFloat(s.azimuth || 0);
         const rad = (az - 90) * (Math.PI / 180);
-        
+
         const x = centerX + Math.cos(rad) * (radioBase * 0.85);
         const y = centerY + Math.sin(rad) * (radioBase * 0.85);
-        
-        // Dibujar punto del satélite
+
+        // Punto del satélite
         ctx.fillStyle = '#00ff41';
         ctx.beginPath();
         ctx.arc(x, y, 4, 0, Math.PI * 2);
         ctx.fill();
-        
+
         // Etiqueta de nombre
         ctx.fillStyle = '#fff';
         ctx.font = '10px Courier New';
@@ -151,15 +153,16 @@ function dibujar() {
 }
 
 // Llamar a esta función cuando los datos de satélites cambien
+// --- 📋 ACTUALIZADOR DE TELEMETRÍA ---
 function actualizarVisorLateral(items) {
     const visor = document.getElementById('visor-telemetria');
     if (!visor) return;
 
     visor.innerHTML = items.length > 0 ?
         items.map(s => `
-            <div class="log-entry" style="border-bottom: 1px solid #003300; margin-bottom: 8px; padding: 5px;">
-                <span style="color: #00ff41;">> ${s.nombre || 'OBJETO'}</span><br>
-                <small style="color: #888;">AZ: ${s.azimuth}° | H: ${s.horario}</small>
+            <div class="log-entry" style="border-bottom: 1px solid #003300; margin-bottom: 8px; padding: 5px; text-align: left;">
+                <span style="color: #00ff41; font-weight: bold;">> ${s.name || 'OBJETO'}</span><br>
+                <small style="color: #888;">AZ: ${parseFloat(s.azimuth || 0).toFixed(0)}° | H: ${s.horario || 'N/A'}</small>
             </div>`).join('') :
         `<div class="log-entry">[ ESCANEANDO LATTICE... ]</div>`;
 }
