@@ -91,7 +91,11 @@ function iniciarMotorRadar() {
 // --- 🎨 MOTOR DE RENDERIZADO Y SINTONÍA ---
 
 function dibujar() {
-    if (!ctx) return;
+    // Protección contra canvas no inicializado o sin dimensiones
+    if (!ctx || canvas.width === 0) {
+        requestAnimationFrame(dibujar);
+        return;
+    }
     
     // Amortiguación de Entropía
     actividad_usuario *= 0.95; 
@@ -112,7 +116,7 @@ function dibujar() {
         ctx.stroke();
     }
 
-    // Brazo de rotación (432Hz Sincronizado)
+    // Brazo de rotación
     const tiempo = Date.now() / 1000;
     const angulo = tiempo * mutacion_entropia;
     ctx.strokeStyle = 'rgba(212, 175, 55, 0.8)';

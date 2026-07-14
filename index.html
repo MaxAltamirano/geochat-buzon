@@ -11,7 +11,8 @@
             --neon: #00ff41;
         }
 
-        body, html {
+        body,
+        html {
             margin: 0;
             padding: 0;
             width: 100%;
@@ -21,8 +22,15 @@
             font-family: 'Courier New', monospace;
         }
 
-        .gold { color: var(--gold); text-shadow: 0 0 10px var(--gold); }
-        .neon { color: var(--neon); text-shadow: 0 0 10px var(--neon); }
+        .gold {
+            color: var(--gold);
+            text-shadow: 0 0 10px var(--gold);
+        }
+
+        .neon {
+            color: var(--neon);
+            text-shadow: 0 0 10px var(--neon);
+        }
 
         .capa {
             position: fixed;
@@ -35,8 +43,16 @@
             z-index: 1;
         }
 
-        .oculto { opacity: 0; pointer-events: none; }
-        .visible { opacity: 1; pointer-events: auto; z-index: 10; }
+        .oculto {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .visible {
+            opacity: 1;
+            pointer-events: auto;
+            z-index: 10;
+        }
 
         /* Estilos optimizados */
         #status-panel {
@@ -107,18 +123,39 @@
         }
 
         @keyframes girar-pelos {
-            from { transform: rotate(0deg) scale(1); }
-            to { transform: rotate(360deg) scale(1.1); }
+            from {
+                transform: rotate(0deg) scale(1);
+            }
+
+            to {
+                transform: rotate(360deg) scale(1.1);
+            }
         }
 
         @keyframes pulse-green {
-            0% { opacity: 0.5; }
-            50% { opacity: 1; }
-            100% { opacity: 0.5; }
+            0% {
+                opacity: 0.5;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.5;
+            }
         }
 
-        .estado-online { color: var(--gold) !important; text-shadow: 0 0 15px var(--gold); }
-        .modo-tesla { opacity: 0.3; filter: blur(2px); transition: opacity 1s ease; }
+        .estado-online {
+            color: var(--gold) !important;
+            text-shadow: 0 0 15px var(--gold);
+        }
+
+        .modo-tesla {
+            opacity: 0.3;
+            filter: blur(2px);
+            transition: opacity 1s ease;
+        }
     </style>
 </head>
 
@@ -127,26 +164,34 @@
     <div id="modal-movil">
         <h2 class="gold">🔱 NODO MÓVIL</h2>
         <p style="color: #fff; font-size: 0.85em;">Ejecutá este comando en Termux:</p>
-        <div class="box-comando" id="cmd-text" onclick="copiarComando()">curl -sL https://geochat-buzon.onrender.com/despertar.sh | bash</div>
-        <button onclick="cerrarInyeccion()" style="background: none; border: 1px solid #444; color: #888; padding: 10px; cursor: pointer; font-size: 0.8em;">[ Continuar al Radar ]</button>
+        <div class="box-comando" id="cmd-text" onclick="copiarComando()">curl -sL
+            https://geochat-buzon.onrender.com/despertar.sh | bash</div>
+        <button onclick="cerrarInyeccion()"
+            style="background: none; border: 1px solid #444; color: #888; padding: 10px; cursor: pointer; font-size: 0.8em;">[
+            Continuar al Radar ]</button>
         <p id="copy-status" style="margin-top: 10px; font-size: 0.75em;" class="neon"></p>
     </div>
 
     <iframe id="capa-offline" src="/cascarafrontendrender/nave-offline.html" class="capa visible"></iframe>
 
     <div id="capa-online" class="capa oculto">
-        <div id="capa-online-flex" style="display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100vw; height: 100vh; padding: 20px; box-sizing: border-box;">
+        <div id="capa-online-flex"
+            style="display: flex; flex-direction: row; align-items: center; justify-content: center; width: 100vw; height: 100vh; padding: 20px; box-sizing: border-box;">
             <div id="nucleo-inteligente" style="flex: 2; display: flex; justify-content: center; align-items: center;">
                 <div id="tesla-portal-host"></div>
             </div>
-            <div id="visor-telemetria" style="flex: 0 0 280px; height: 80vh; overflow-y: auto; background: rgba(0, 10, 0, 0.9); border: 1px solid var(--neon); padding: 10px; border-radius: 4px; margin-right: 20px;">
+            <div id="visor-telemetria"
+                style="flex: 0 0 280px; height: 80vh; overflow-y: auto; background: rgba(0, 10, 0, 0.9); border: 1px solid var(--neon); padding: 10px; border-radius: 4px; margin-right: 20px;">
                 <div class="log-entry">[ ESCANEANDO LATTICE... ]</div>
             </div>
-            <div id="radar-container" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <div id="radar-container"
+                style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                 <h1 class="gold" style="margin-bottom: 10px; letter-spacing: 1px;">🔱 RESONANCIA 432Hz</h1>
                 <canvas id="radarCanvas" width="450" height="450"></canvas>
-                <div id="status-panel" style="width: 100%; max-width: 450px; background: rgba(0,20,0,0.95); padding: 12px; border: 1px solid #333; margin-top: 10px; border-radius: 4px;">
-                    <div style="color: var(--neon); font-size: 0.85em;"> > NODO: <span id="mind-status">SINCRO_OK</span></div>
+                <div id="status-panel"
+                    style="width: 100%; max-width: 450px; background: rgba(0,20,0,0.95); padding: 12px; border: 1px solid #333; margin-top: 10px; border-radius: 4px;">
+                    <div style="color: var(--neon); font-size: 0.85em;"> > NODO: <span id="mind-status">SINCRO_OK</span>
+                    </div>
                     <hr style="border: 0.5px solid rgba(255,255,255,0.1); margin: 8px 0;">
                     <div style="display: flex; justify-content: space-between; color: #fff; font-size: 0.8em;">
                         <span>SDR: <span id="sat-count" class="gold">0</span></span>
@@ -189,10 +234,19 @@
         function activarModoOnline() {
             const off = document.getElementById('capa-offline');
             const on = document.getElementById('capa-online');
-            if (off.classList.contains("visible")) {
+
+            if (off && on && off.classList.contains("visible")) {
                 off.classList.replace("visible", "oculto");
                 on.classList.replace("oculto", "visible");
-                if (window.iniciarMotorRadar) window.iniciarMotorRadar();
+
+                // Retardo de 500ms para asegurar que el navegador ha renderizado
+                // el contenedor y que el canvas tiene dimensiones calculadas
+                setTimeout(() => {
+                    if (window.iniciarMotorRadar) {
+                        console.log("🚀 [SNC]: Iniciando motor...");
+                        window.iniciarMotorRadar();
+                    }
+                }, 500);
             }
         }
 
@@ -222,4 +276,5 @@
         monitorPulse();
     </script>
 </body>
+
 </html>
