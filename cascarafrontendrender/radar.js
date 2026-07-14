@@ -154,17 +154,27 @@ function dibujar() {
 
 // Llamar a esta función cuando los datos de satélites cambien
 // --- 📋 ACTUALIZADOR DE TELEMETRÍA ---
+// Variable global para persistencia de estado (debe ir fuera de la función)
+let estadoUltimo = ""; 
+
 function actualizarVisorLateral(items) {
     const visor = document.getElementById('visor-telemetria');
     if (!visor) return;
 
-    visor.innerHTML = items.length > 0 ?
+    // Generamos el nuevo HTML basado en los datos actuales
+    const nuevoHTML = items.length > 0 ?
         items.map(s => `
             <div class="log-entry" style="border-bottom: 1px solid #003300; margin-bottom: 8px; padding: 5px; text-align: left;">
                 <span style="color: #00ff41; font-weight: bold;">> ${s.name || 'OBJETO'}</span><br>
                 <small style="color: #888;">AZ: ${parseFloat(s.azimuth || 0).toFixed(0)}° | H: ${s.horario || 'N/A'}</small>
             </div>`).join('') :
         `<div class="log-entry">[ ESCANEANDO LATTICE... ]</div>`;
+
+    // Comparación de estado para evitar refresco innecesario del DOM
+    if (nuevoHTML !== estadoUltimo) {
+        visor.innerHTML = nuevoHTML;
+        estadoUltimo = nuevoHTML;
+    }
 }
 
 // Ejemplo de uso: actualiza el panel cada 2 segundos para no sobrecargar
