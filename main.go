@@ -330,6 +330,13 @@ func main() {
 			"mode":       "IRON_GRID_ACTIVE",
 		}
 
+		// --- CALIBRACIÓN: LOGUEAR LO QUE ESTAMOS ENVIANDO AL RADAR ---
+		log.Printf("DEBUG [CALIBRACIÓN]: Enviando %d satélites/objetos al frontend", len(listaSatelites))
+		for _, s := range listaSatelites {
+			log.Printf("DEBUG [SATELLITE]: %s - Az: %.2f, Alt: %.2f", s.Name, s.Azimuth, s.Altitud)
+		}
+		// -------------------------------------------------------------
+
 		// 6. Transmisión
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(data)
@@ -429,30 +436,51 @@ func obtenerDatosTrackingReal() []ObjetoLattice {
 
 // Extraemos la lógica de OpenSky para mantener la armonía
 func fetchOpenSky() []ObjetoLattice {
-    url := "https://opensky-network.org/api/states/all?lamin=-35&lomin=-59&lamax=-34&lomax=-57"
+    // Caja de búsqueda sobre Buenos Aires/Avellaneda
+    url := "https://opensky-network.org/api/states/all?lamin=-37&lomin=-60&lamax=-33&lomax=-56"
     client := http.Client{Timeout: 3 * time.Second}
     resp, err := client.Get(url)
-    if err != nil { return []ObjetoLattice{} }
+    if err != nil { 
+        log.Printf("❌ [RADAR]: Error conectando a OpenSky: %v", err)
+        return []ObjetoLattice{} 
+    }
     defer resp.Body.Close()
 
     var result OpenSkyResponse
-    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { return []ObjetoLattice{} }
+    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { 
+        return []ObjetoLattice{} 
+    }
 
     var lista []ObjetoLattice
     for _, s := range result.States {
-        if len(s) > 1 && s[1] != nil {
+        // s[1] es CallSign, s[10] es Track (Azimuth), s[7] es GeoAltitude
+        if len(s) > 10 && s[1] != nil {
+            name := s[1].(string)
+            
+            // Extracción segura del Azimuth (Track)
+            azimuth := 0.0
+            if s[10] != nil {
+                azimuth = s[10].(float64)
+            }
+            
+            // Extracción segura de la Altitud
+            altitud := 0.0
+            if s[7] != nil {
+                altitud = s[7].(float64)
+            }
+
             lista = append(lista, ObjetoLattice{
-                Name:    s[1].(string),
-                Azimuth: 0.0, // El radar lo posicionará según el valor
-                Altitud: 0,
+                Name:    name,
+                Azimuth: azimuth,
+                Altitud: altitud,
             })
-            if len(lista) >= 3 { break }
+            
+            if len(lista) >= 5 { break } // Aumentamos a 5 para más densidad
         }
     }
-    // Después de decodificar el resultado:
-	log.Printf("DEBUG: Cantidad de vuelos encontrados: %d", len(result.States))
-	return lista
-	
+    
+    log.Printf("DEBUG [RADAR]: Vuelos capturados en red: %d. Muestreando %d objetos.", len(result.States), len(lista))
+    return lista
 }
 
 // Captura actividad básica (ejemplo: detectar eventos en /dev/input)

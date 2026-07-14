@@ -28,3 +28,10 @@ descarga_debug.txt
 !cascarafrontendrender/
 !frontend/
 !src/
+
+# --- Desbloqueo de Fuentes Críticas ---
+!main.go
+!go.mod
+!go.sum
+!render.yaml
+!Dockerfile
