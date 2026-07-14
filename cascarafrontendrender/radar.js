@@ -81,23 +81,29 @@ const renderVisorLateral = (items) => {
 };
 
 // --- 🎨 MOTOR DE RENDERIZADO ---
-// --- 🎨 MOTOR DE RENDERIZADO FINAL Y ESTABLE ---
+
+function iniciarMotorRadar() {
+    console.log("🔱 [SNC]: Motor unificado activo. Sintonizando 432Hz...");
+    conectarSNC();
+    dibujar();
+}
+
+// --- 🎨 MOTOR DE RENDERIZADO Y SINTONÍA ---
+
 function dibujar() {
     if (!ctx) return;
     
-    // 1. Amortiguación de Entropía (Evita aceleraciones bruscas)
+    // Amortiguación de Entropía
     actividad_usuario *= 0.95; 
-    
-    // 2. Cálculo de Mutación (Limitado a 0.5 de incremento máximo)
     mutacion_entropia = 1.0 + Math.min(actividad_usuario * 0.1, 0.5);
 
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
-    const radioBase = 200; // Radio fijo: el radar no cambia de tamaño bruscamente
+    const radioBase = 200;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // 3. Anillos Elegantes (Más finos y sutiles)
+    // Anillos de resonancia
     ctx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
     ctx.lineWidth = 0.5;
     for (let i = 1; i <= 3; i++) {
@@ -106,10 +112,9 @@ function dibujar() {
         ctx.stroke();
     }
 
-    // 4. Brazo de Rotación (Sincronizado con la entropía)
+    // Brazo de rotación (432Hz Sincronizado)
     const tiempo = Date.now() / 1000;
     const angulo = tiempo * mutacion_entropia;
-    
     ctx.strokeStyle = 'rgba(212, 175, 55, 0.8)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -117,14 +122,13 @@ function dibujar() {
     ctx.lineTo(centerX + Math.cos(angulo) * radioBase, centerY + Math.sin(angulo) * radioBase);
     ctx.stroke();
 
-    // 5. Renderizado de Objetos detectados (Satélites/Vuelos)
+    // Renderizado de satélites
     ctx.fillStyle = '#d4af37';
     satelitesGlobal.forEach((s) => {
         const az = parseFloat(s.azimuth || 0);
         const rad = (az * Math.PI) / 180;
         const x = centerX + Math.cos(rad) * (radioBase * 0.85);
         const y = centerY + Math.sin(rad) * (radioBase * 0.85);
-        
         ctx.beginPath();
         ctx.arc(x, y, 3, 0, Math.PI * 2);
         ctx.fill();
@@ -133,10 +137,11 @@ function dibujar() {
     requestAnimationFrame(dibujar);
 }
 
-function iniciarMotorRadar() {
-    console.log("🔱 [SNC]: Motor unificado activo. Sintonizando 432Hz...");
-    conectarSNC();
+// ÚNICO punto de entrada expuesto a la ventana (Global)
+window.iniciarMotorRadar = () => {
+    console.log("🚀 [SNC]: Motor de radar activado y sintonizado.");
+    // Iniciamos la conexión y el bucle de render una sola vez
+    conectarSNC(); 
     dibujar();
-}
+};
 
-window.iniciarMotorRadar = iniciarMotorRadar;
