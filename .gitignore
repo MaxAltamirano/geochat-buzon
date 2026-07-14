@@ -10,6 +10,7 @@ main
 buzon_server
 *.log
 *.bak
+descarga_debug.txt
 
 # --- Sistema y versiones ---
 .git/
