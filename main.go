@@ -449,7 +449,10 @@ func fetchOpenSky() []ObjetoLattice {
             if len(lista) >= 3 { break }
         }
     }
-    return lista
+    // Después de decodificar el resultado:
+	log.Printf("DEBUG: Cantidad de vuelos encontrados: %d", len(result.States))
+	return lista
+	
 }
 
 // Captura actividad básica (ejemplo: detectar eventos en /dev/input)

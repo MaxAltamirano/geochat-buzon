@@ -196,11 +196,16 @@
             <!-- Panel Derecho: Radar + Panel de Estado -->
             <div id="radar-container" style="display: flex; flex-direction: column; align-items: center;">
                 <h1 class="gold">RESONANCIA 432Hz</h1>
+
+                <!-- El Radar permanece como centro de la visión -->
                 <canvas id="radarCanvas" width="450" height="450"></canvas>
+
+                <!-- El status-panel ahora actúa como Dashboard Inferior -->
                 <div id="status-panel"
-                    style="width: 450px; border: 1px solid var(--gold); padding: 10px; margin-top: 10px; background: #000;">
-                    <div style="color: var(--neon);"> > NODO: SINCRO_OK | SDR: <span id="sat-count">0</span> | PAXG:
-                        15.15 | FREQ: 432.17 Hz</div>
+                    style="width: 450px; border: 1px solid var(--gold); padding: 10px; margin-top: 15px; background: #000; box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);">
+                    <div style="color: var(--neon); font-family: monospace; font-size: 14px;">
+                        > NODO: SINCRO_OK | SDR: <span id="sat-count">0</span> | PAXG: 15.15 | FREQ: 432.17 Hz
+                    </div>
                 </div>
             </div>
         </div>
