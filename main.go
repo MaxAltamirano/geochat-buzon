@@ -287,8 +287,8 @@ func main() {
 
 	mux.HandleFunc("/api/estado-global", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		// Verificamos si el nodo local está emitiendo latidos (físicamente vivo)
-		estaOnline := time.Since(ultimoPulsoLocal) < 30*time.Second // Ampliado a 30s por seguridad
+		// Detección automática: Si el pulso es menor a 30s, el nodo es parte de la red viva
+		estaOnline := time.Since(ultimoPulsoLocal) < 30*time.Second
 		mu.Unlock()
 
 		var estadoFinal string
@@ -298,10 +298,10 @@ func main() {
 			estadoFinal = "OFFLINE"
 		}
 
-		// Estructura que satisface el radar.js
+		// Estructura oficial para la sincronización con el radar
 		data := map[string]interface{}{
 			"status":     estadoFinal,
-			"frecuencia": 432.17, // Valor numérico para radar
+			"frecuencia": 432.17,
 			"satelites": []map[string]interface{}{
 				{
 					"name":    "NODO_AVELLANEDA",
