@@ -340,6 +340,13 @@ func main() {
 		w.Write([]byte("Telemetria recibida y procesada"))
 	}))
 
+	// Habilitar el script de despertar para nodos móviles
+	mux.HandleFunc("/despertar.sh", func(w http.ResponseWriter, r *http.Request) {
+		// Establecer tipo de contenido como shell script
+		w.Header().Set("Content-Type", "text/x-shellscript")
+		http.ServeFile(w, r, "despertar.sh")
+	})
+
 	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
 	port := os.Getenv("PORT")
 	if port == "" {
