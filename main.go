@@ -394,37 +394,27 @@ func main() {
 func obtenerDatosTrackingReal() []ObjetoLattice {
 	var lista []ObjetoLattice
 
-	// 1. Obtener Aviones (OpenSky)
-	urlAviones := "https://opensky-network.org/api/states/all?lamin=-35&lomin=-59&lamax=-34&lomax=-57"
-	client := http.Client{Timeout: 3 * time.Second}
-	
-	resp, err := client.Get(urlAviones)
-	if err == nil {
-		var result OpenSkyResponse
-		if err := json.NewDecoder(resp.Body).Decode(&result); err == nil {
-			for _, s := range result.States {
-				if s[1] != nil {
-					lista = append(lista, ObjetoLattice{
-						Name:    s[1].(string),
-						Azimuth: 0.0, // El radar lo posicionará dinámicamente
-						Altitud: 0,
-					})
-				}
-				if len(lista) >= 3 { break }
-			}
-		}
-		resp.Body.Close()
-	}
+	// 1. Obtener Aviones utilizando la función auxiliar fetchOpenSky
+	// Esto integra tu lógica modular y elimina el error de función no utilizada.
+	listaAviones := fetchOpenSky()
+	lista = append(lista, listaAviones...)
 
 	// 2. Obtener Satélites (ISS como referencia)
 	urlSats := "https://api.wheretheiss.at/v1/satellites/25544"
+	client := http.Client{Timeout: 3 * time.Second}
+
 	respSats, err := client.Get(urlSats)
 	if err == nil {
+		// Aseguramos el cierre del cuerpo de la respuesta para evitar fugas de memoria
+		defer respSats.Body.Close()
+
 		var iss struct {
 			Name      string  `json:"name"`
 			Longitude float64 `json:"longitude"`
 		}
+		
 		if err := json.NewDecoder(respSats.Body).Decode(&iss); err == nil {
+			// Conversión de longitud a azimut simple para el radar
 			azimut := float64(int(iss.Longitude) % 360)
 			lista = append(lista, ObjetoLattice{
 				Name:    "ISS_SATELLITE",
@@ -432,7 +422,6 @@ func obtenerDatosTrackingReal() []ObjetoLattice {
 				Altitud: 400,
 			})
 		}
-		respSats.Body.Close()
 	}
 
 	return lista
