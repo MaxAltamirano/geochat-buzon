@@ -436,34 +436,44 @@ func obtenerDatosTrackingReal() []ObjetoLattice {
 
 // Extraemos la lógica de OpenSky para mantener la armonía
 func fetchOpenSky() []ObjetoLattice {
-    // Caja de búsqueda sobre Buenos Aires/Avellaneda
+    // 1. Configuración de cliente con Timeout ampliado a 10s
+    client := http.Client{Timeout: 10 * time.Second}
+    
+    // 2. Preparación de la petición con User-Agent para evitar bloqueos
     url := "https://opensky-network.org/api/states/all?lamin=-37&lomin=-60&lamax=-33&lomax=-56"
-    client := http.Client{Timeout: 3 * time.Second}
-    resp, err := client.Get(url)
-    if err != nil { 
-        log.Printf("❌ [RADAR]: Error conectando a OpenSky: %v", err)
-        return []ObjetoLattice{} 
+    req, err := http.NewRequest("GET", url, nil)
+    if err != nil {
+        return []ObjetoLattice{}
+    }
+    req.Header.Set("User-Agent", "GeoChat-Node/1.0")
+
+    // 3. Ejecución de la solicitud
+    resp, err := client.Do(req)
+    if err != nil {
+        log.Printf("⚠️ [RADAR]: Retraso o bloqueo de red: %v", err)
+        return []ObjetoLattice{}
     }
     defer resp.Body.Close()
 
+    // 4. Decodificación de respuesta
     var result OpenSkyResponse
-    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { 
-        return []ObjetoLattice{} 
+    if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+        log.Printf("❌ [RADAR]: Error decodificando JSON: %v", err)
+        return []ObjetoLattice{}
     }
 
+    // 5. Procesamiento de telemetría (Extracción de Azimuth y Altitud)
     var lista []ObjetoLattice
     for _, s := range result.States {
-        // s[1] es CallSign, s[10] es Track (Azimuth), s[7] es GeoAltitude
+        // s[1] CallSign, s[10] Track (Azimuth), s[7] GeoAltitude
         if len(s) > 10 && s[1] != nil {
             name := s[1].(string)
             
-            // Extracción segura del Azimuth (Track)
             azimuth := 0.0
             if s[10] != nil {
                 azimuth = s[10].(float64)
             }
             
-            // Extracción segura de la Altitud
             altitud := 0.0
             if s[7] != nil {
                 altitud = s[7].(float64)
@@ -475,7 +485,7 @@ func fetchOpenSky() []ObjetoLattice {
                 Altitud: altitud,
             })
             
-            if len(lista) >= 5 { break } // Aumentamos a 5 para más densidad
+            if len(lista) >= 5 { break }
         }
     }
     
