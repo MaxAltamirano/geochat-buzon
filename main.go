@@ -17,6 +17,7 @@ import (
 	//"os/exec"
 	//"strings"
 	//"strconv"
+	//"path/filepath"
 )
 
 // --- ESTRUCTURA DEL PULSO VITAL (TELEMETRÍA) ---
@@ -345,6 +346,18 @@ func main() {
 		// Establecer tipo de contenido como shell script
 		w.Header().Set("Content-Type", "text/x-shellscript")
 		http.ServeFile(w, r, "despertar.sh")
+	})
+
+	mux.HandleFunc("/descargar/geochat-movil", func(w http.ResponseWriter, r *http.Request) {
+		// Intentamos buscar en el directorio donde reside el ejecutable
+		// O simplemente en la raíz relativa "./"
+		filename := "geochat-movil"
+
+		// Forzamos la descarga del archivo como binario
+		w.Header().Set("Content-Disposition", "attachment; filename=geochat-movil")
+		w.Header().Set("Content-Type", "application/octet-stream")
+
+		http.ServeFile(w, r, filename)
 	})
 
 	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
