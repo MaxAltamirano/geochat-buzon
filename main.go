@@ -223,17 +223,28 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
-// Agrega esta función y úsala en tu manejador de rutas
-func enableCORS(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*") // O cámbialo por tu URL de frontend específica
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-}
+
 
 // En tu manejador de la ruta /api/estado-global:
 func handleEstadoGlobal(w http.ResponseWriter, r *http.Request) {
-	enableCORS(w)
-	// ... resto de tu lógica ...
+    // Definir explícitamente las políticas de acceso soberano
+    w.Header().Set("Access-Control-Allow-Origin", "*")
+    w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+    w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+    // Manejo de la petición de pre-vuelo (la clave para que el navegador no bloquee el fetch)
+    if r.Method == http.MethodOptions {
+        w.WriteHeader(http.StatusOK)
+        return
+    }
+
+    // Lógica protegida por Mutex para telemetría
+    muTelemetria.Lock()
+    datos := ultimaTelemetria
+    muTelemetria.Unlock()
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(datos)
 }
 
 // Función profesional para el Motor
