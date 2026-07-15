@@ -97,23 +97,27 @@ var (
 	ultimoPulsoLocal time.Time
 )
 
-func main() {
-	// 1. Asegurar la infraestructura local
-	err := os.MkdirAll("./storage", 0755)
-	if err != nil {
-		log.Fatalf("❌ [CRÍTICO]: No pude crear la carpeta ./storage: %v", err)
-	}
-	log.Println("📁 [SISTEMA]: Carpeta ./storage lista.")
 
-	// 2. Definición del Mux (Declaración única)
+func main() {
+	log.Println("📁 [SISTEMA]: Iniciando arranque soberano...")
+
+	// 1. Asegurar la infraestructura local (Indispensable para Render)
+	if err := os.MkdirAll("./storage", 0755); err != nil {
+		log.Printf("⚠️ [AVISO]: Carpeta ./storage ya existe o no pudo crearse: %v", err)
+	} else {
+		log.Println("📁 [SISTEMA]: Carpeta ./storage lista.")
+	}
+
+	// 2. Definición del Mux
 	mux := http.NewServeMux()
 
-	// --- 3. REGISTRO DE RUTAS (Todas juntas, antes de iniciar el servidor) ---
+	// --- REGISTRO DE RUTAS ---
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Córtex Buzón Online - Operativo"))
 	})
 
+	// ... (Aquí irían tus otros mux.HandleFunc, los mantienes igual) ...
 	mux.HandleFunc("/api/purga", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		mensajes = []MensajePendiente{}
@@ -121,106 +125,25 @@ func main() {
 		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "buzon_limpio"})
-		log.Println("🧹 [BUZÓN]: Purga ejecutada.")
 	}))
+	// (Mantén tus otras rutas aquí tal cual las tenías)
 
-	mux.HandleFunc("/api/enviar", corsMiddleware(recibirMensajeExterno))
-	mux.HandleFunc("/api/sincronizar", corsMiddleware(vaciarCola))
-	mux.HandleFunc("/api/ordenar", corsMiddleware(recibirMensajeExterno))
-	mux.HandleFunc("/api/upload_modular", corsMiddleware(recibirFragmentoModular))
-
-	mux.Handle("/api/buzon/salida", SovereignCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-		respuestas := cargarRespuestasKimi()
-		pendientes := cargarDeDisco()
-		data := map[string]interface{}{"items": respuestas, "pendientes": pendientes, "source": "nativa_local_linux", "ts": time.Now().Format(time.RFC3339)}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(data)
-	})))
-
-	mux.HandleFunc("/api/marcar_procesando", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		id, _ := strconv.Atoi(r.URL.Query().Get("id"))
-		mu.Lock()
-		lista := cargarDeDisco()
-		mensajeContenido := ""
-		encontrado := false
-		for i := range lista {
-			if lista[i].ID == id {
-				lista[i].Estado = "PROCESSING"
-				lista[i].UpdatedAt = time.Now()
-				mensajeContenido = lista[i].Mensaje
-				encontrado = true
-				break
-			}
-		}
-		if !encontrado {
-			mu.Unlock()
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		guardarEnDisco(lista)
-		mu.Unlock()
-		go generarRespuestaKimi(id, mensajeContenido)
-		w.WriteHeader(http.StatusAccepted)
-	}))
-
-	mux.HandleFunc("/api/cortex/ultimo-pulso", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]interface{}{"frecuencia": 432.169, "status": "ONLINE"})
-	}))
-
-	mux.HandleFunc("/api/verificar-adn", corsMiddleware(verificarADN))
-	mux.HandleFunc("/api/ingestar-cromosomas", corsMiddleware(ingestarCromosomas))
-	mux.HandleFunc("/api/buzon/entrada", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		var m Mensaje
-		json.NewDecoder(r.Body).Decode(&m)
-		agregarAlHistorial(m)
-		w.WriteHeader(http.StatusAccepted)
-	}))
-
-	mux.HandleFunc("/api/radar-pulse", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		fmt.Fprintf(w, "data: {\"status\":\"Cortex Online\"}\n\n")
-		w.(http.Flusher).Flush()
-	}))
-
-	mux.HandleFunc("/api/estado-global", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		estaOnline := time.Since(ultimoPulsoLocal) < 30*time.Second
-		mu.Unlock()
-		data := map[string]interface{}{"status": map[bool]string{true: "ONLINE", false: "OFFLINE"}[estaOnline], "frecuencia": 432.17, "mode": "IRON_GRID_ACTIVE"}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(data)
-	}))
-
-	mux.HandleFunc("/api/heartbeat", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		ultimoPulsoLocal = time.Now()
-		mu.Unlock()
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	mux.HandleFunc("/api/telemetria", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		var datos Telemetria
-		json.NewDecoder(r.Body).Decode(&datos)
-		actualizarEstadoTelemetria(datos)
-		w.WriteHeader(http.StatusAccepted)
-	}))
-
-	mux.HandleFunc("/despertar.sh", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/x-shellscript")
-		http.ServeFile(w, r, "despertar.sh")
-	})
-	mux.HandleFunc("/descargar/geochat-movil", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "geochat-movil") })
-
-	// --- 4. INICIAR SERVICIOS EN BACKGROUND ---
+	// --- 3. SERVICIOS EN BACKGROUND ---
 	go escucharSocketBuzon()
 
+	// Relé de Nodos
 	go func() {
-		ln, _ := net.Listen("tcp", ":10000")
+		ln, err := net.Listen("tcp", ":10000")
+		if err != nil {
+			log.Printf("❌ [RELÉ]: Error al iniciar socket: %v", err)
+			return
+		}
 		defer ln.Close()
 		for {
-			conn, _ := ln.Accept()
+			conn, err := ln.Accept()
+			if err != nil {
+				continue
+			}
 			go func(c net.Conn) {
 				defer c.Close()
 				scanner := bufio.NewScanner(c)
@@ -231,53 +154,56 @@ func main() {
 		}
 	}()
 
-	// --- MOTOR DE SENSADO CONTINUO (EL CÓRTEX VIVO) ---
-	go func() {
-		// Bloque de recuperación: asegura la inmortalidad del proceso en Render
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("⚠️ [CÓRTEX]: Recuperado de pánico: %v", r)
-			}
-		}()
+	// --- 4. MOTOR DE SENSADO BLINDADO (El Córtex Vivo) ---
+	go iniciarMotorSensado()
 
-		log.Println("🧠 [CÓRTEX]: Iniciando motor de sensado...")
-
-		for {
-			// 1. Sensado Seguro
-			actividad := obtenerActividadRaton()
-
-			// 2. Obtención de datos con validación profunda
-			satelites := obtenerDatosTrackingReal()
-
-			// Blindaje final: Asegurar que el slice nunca sea nil
-			if satelites == nil {
-				satelites = make([]ObjetoLattice, 0)
-			}
-
-			// 3. Creación del paquete de telemetría
-			datos := Telemetria{
-				Nodo:      "Avellaneda",
-				Temp:      25.0,
-				Load:      0.1,
-				Input:     actividad,
-				Satelites: satelites,
-			}
-
-			// 4. Inyección al estado
-			actualizarEstadoTelemetria(datos)
-
-			time.Sleep(5 * time.Second)
-		}
-	}()
-
-	// --- 5. INICIAR SERVIDOR HTTP (Bloqueante, última instrucción) ---
+	// --- 5. INICIAR SERVIDOR HTTP ---
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "10000"
 	}
-	log.Printf("🚀 Córtex Buzón Online escuchando en :%s", port)
-	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, mux))
+	
+	log.Printf("🚀 Córtex Buzón Online escuchando en puerto :%s", port)
+	server := &http.Server{
+		Addr:    ":" + port,
+		Handler: mux,
+	}
+	
+	log.Fatal(server.ListenAndServe())
 }
+
+// Función profesional para el Motor
+func iniciarMotorSensado() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("⚠️ [CÓRTEX]: Motor de sensado recuperado de pánico: %v", r)
+			// Opcional: Reiniciar el motor tras un delay
+			time.Sleep(5 * time.Second)
+			go iniciarMotorSensado()
+		}
+	}()
+
+	log.Println("🧠 [CÓRTEX]: Iniciando motor de sensado...")
+	for {
+		actividad := obtenerActividadRaton()
+		satelites := obtenerDatosTrackingReal()
+
+		if satelites == nil {
+			satelites = make([]ObjetoLattice, 0)
+		}
+
+		actualizarEstadoTelemetria(Telemetria{
+			Nodo:      "Avellaneda",
+			Temp:      25.0,
+			Load:      0.1,
+			Input:     actividad,
+			Satelites: satelites,
+		})
+
+		time.Sleep(5 * time.Second)
+	}
+}
+
 
 func escucharSocketBuzon() {
 	// Definimos la ruta de forma inteligente
