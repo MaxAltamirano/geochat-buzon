@@ -21,8 +21,9 @@ fi
 # 2. Gestión del Binario (El Corazón del Córtex)
 if [ ! -f "$DESTINO" ]; then
     echo "[STATUS] Binario no encontrado. Descargando desde el Buzón Soberano..."
-    //curl -sL https://geochat-buzon.onrender.com/descargar/geochat-movil -o "$DESTINO"
+    # URL corregida para apuntar al binario en GitHub Releases
     curl -sL https://github.com/MaxAltamirano/geochat-buzon/releases/download/v1.0.0/geochat-movil -o "$DESTINO"
+    
     if [ $? -eq 0 ]; then
         echo "[SUCCESS] Binario descargado exitosamente."
     else
