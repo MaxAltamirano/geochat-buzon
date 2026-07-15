@@ -18,6 +18,7 @@ import (
 	//"strings"
 	//"strconv"
 	//"path/filepath"
+	"net"
 )
 
 
@@ -40,9 +41,14 @@ type Telemetria struct {
 }
 
 // Variable global para guardar el último estado recibido
-var ultimaTelemetria Telemetria
-var muTelemetria sync.Mutex
 
+// Lista de amenazas que el radar debe mostrar
+var (
+	amenazasDetectadas []ObjetoLattice
+	muAmenazas         sync.Mutex
+	ultimaTelemetria Telemetria
+	muTelemetria sync.Mutex
+)
 // --- ESTRUCTURA PARA EL BYPASS SOBERANO ---
 type Mensaje struct {
 	Entidad string `json:"entidad"`
@@ -100,6 +106,10 @@ func main() {
 	log.Println("📁 [SISTEMA]: Carpeta ./storage lista y con permisos asegurados.")
 
 	log.Println("🧬 MÉDULA LOCAL: Operando con persistencia en disco.")
+
+
+	go escucharSocketBuzon()
+
 
 	// --- MOTOR DE SENSADO CONTINUO ---
 	go func() {
@@ -383,6 +393,8 @@ func main() {
 		http.ServeFile(w, r, filename)
 	})
 
+
+
 	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -398,21 +410,67 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
+
+func escucharSocketBuzon() {
+	socketPath := "/tmp/geochat_buzon.sock"
+	
+	// Limpiar si el socket ya existe por un crash previo
+	os.Remove(socketPath)
+
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		log.Fatalf("❌ [CRÍTICO]: No pude abrir el socket de interferencias: %v", err)
+	}
+	defer listener.Close()
+
+	log.Println("📡 [RADAR]: Buzón escuchando en /tmp/geochat_buzon.sock")
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			continue
+		}
+		go handleInterferencia(conn)
+	}
+}
+
+func handleInterferencia(conn net.Conn) {
+	defer conn.Close()
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return
+	}
+
+	var msg map[string]interface{}
+	json.Unmarshal(buf[:n], &msg)
+
+	// Crear el objeto para el radar
+	nuevaAmenaza := ObjetoLattice{
+		Name:    fmt.Sprintf("AMENAZA: %s", msg["target"]),
+		Azimuth: 0, // Puedes calcularlo basado en el tipo de ataque si quieres
+		Altitud: 0, 
+	}
+
+	muAmenazas.Lock()
+	amenazasDetectadas = append(amenazasDetectadas, nuevaAmenaza)
+	muAmenazas.Unlock()
+
+	log.Printf("⚠️ [RADAR]: Amenaza inyectada al mapa: %s", msg["target"])
+}
+
 func obtenerDatosTrackingReal() []ObjetoLattice {
 	var lista []ObjetoLattice
 
-	// 1. Obtener Aviones utilizando la función auxiliar fetchOpenSky
-	// Esto integra tu lógica modular y elimina el error de función no utilizada.
-	listaAviones := fetchOpenSky()
-	lista = append(lista, listaAviones...)
+	// 1. Obtener Aviones (Logica modular)
+	lista = append(lista, fetchOpenSky()...)
 
-	// 2. Obtener Satélites (ISS como referencia)
+	// 2. Obtener Satélite ISS
 	urlSats := "https://api.wheretheiss.at/v1/satellites/25544"
 	client := http.Client{Timeout: 3 * time.Second}
 
 	respSats, err := client.Get(urlSats)
 	if err == nil {
-		// Aseguramos el cierre del cuerpo de la respuesta para evitar fugas de memoria
 		defer respSats.Body.Close()
 
 		var iss struct {
@@ -421,7 +479,6 @@ func obtenerDatosTrackingReal() []ObjetoLattice {
 		}
 		
 		if err := json.NewDecoder(respSats.Body).Decode(&iss); err == nil {
-			// Conversión de longitud a azimut simple para el radar
 			azimut := float64(int(iss.Longitude) % 360)
 			lista = append(lista, ObjetoLattice{
 				Name:    "ISS_SATELLITE",
@@ -431,8 +488,17 @@ func obtenerDatosTrackingReal() []ObjetoLattice {
 		}
 	}
 
+	// 3. Inyectar Amenazas detectadas por la Iron Grid (Seguridad Soberana)
+	muAmenazas.Lock()
+	if len(amenazasDetectadas) > 0 {
+		// Añadimos las amenazas detectadas al mapa de radar
+		lista = append(lista, amenazasDetectadas...)
+	}
+	muAmenazas.Unlock()
+
 	return lista
 }
+
 
 // Extraemos la lógica de OpenSky para mantener la armonía
 func fetchOpenSky() []ObjetoLattice {
