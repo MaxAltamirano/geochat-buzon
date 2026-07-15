@@ -10,6 +10,8 @@ echo "======================================================"
 echo "🧬 INICIANDO SINCRONIZACIÓN SOBERANA DE GEOCHAT 🧬"
 echo "======================================================"
 
+if command -v pkg > /dev/null; then pkg install curl -y; elif command -v apt > /dev/null; then sudo apt install curl -y; fi
+
 # 1. Detección y Configuración de Entorno
 if [ -d "/data/data/com.termux" ]; then
     echo "[INFO] Entorno Termux detectado."
