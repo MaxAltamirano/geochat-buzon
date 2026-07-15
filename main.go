@@ -18,9 +18,9 @@ import (
 	//"strings"
 	//"strconv"
 	//"path/filepath"
+	"bufio"
 	"net"
 )
-
 
 type OpenSkyResponse struct {
 	States [][]interface{} `json:"states"`
@@ -34,10 +34,11 @@ type ObjetoLattice struct {
 
 // --- ESTRUCTURA DEL PULSO VITAL (TELEMETRÍA) ---
 type Telemetria struct {
-	Nodo  string  `json:"nodo"`
-	Temp  float64 `json:"temp"`
-	Load  float64 `json:"load"`
-	Input string  `json:"input_activity"`
+	Nodo      string  `json:"nodo"`
+	Temp      float64 `json:"temp"`
+	Load      float64 `json:"load"`
+	Input     string  `json:"input_activity"`
+	Satelites []ObjetoLattice
 }
 
 // Variable global para guardar el último estado recibido
@@ -46,9 +47,10 @@ type Telemetria struct {
 var (
 	amenazasDetectadas []ObjetoLattice
 	muAmenazas         sync.Mutex
-	ultimaTelemetria Telemetria
-	muTelemetria sync.Mutex
+	ultimaTelemetria   Telemetria
+	muTelemetria       sync.Mutex
 )
+
 // --- ESTRUCTURA PARA EL BYPASS SOBERANO ---
 type Mensaje struct {
 	Entidad string `json:"entidad"`
@@ -96,53 +98,21 @@ var (
 )
 
 func main() {
-
-	// 1. Asegurar la existencia de la carpeta de almacenamiento con permisos 0755
-	// 0755 significa: el dueño puede leer/escribir/ejecutar, el resto solo leer/ejecutar
+	// 1. Asegurar la infraestructura local
 	err := os.MkdirAll("./storage", 0755)
 	if err != nil {
 		log.Fatalf("❌ [CRÍTICO]: No pude crear la carpeta ./storage: %v", err)
 	}
-	log.Println("📁 [SISTEMA]: Carpeta ./storage lista y con permisos asegurados.")
+	log.Println("📁 [SISTEMA]: Carpeta ./storage lista.")
 
-	log.Println("🧬 MÉDULA LOCAL: Operando con persistencia en disco.")
-
-
-	go escucharSocketBuzon()
-
-
-	// --- MOTOR DE SENSADO CONTINUO ---
-	go func() {
-		for {
-			// Ejecutamos la función que estaba "sin usar"
-			actividad := obtenerActividadRaton()
-
-			// Creamos el paquete de telemetría
-			datos := Telemetria{
-				Nodo:  "Avellaneda",
-				Temp:  25.0, // Aquí podrías llamar a una función de lectura real
-				Load:  0.1,  // Aquí podrías llamar a una función de carga real
-				Input: actividad,
-			}
-
-			// Enviamos al sistema
-			actualizarEstadoTelemetria(datos)
-
-			// Frecuencia de muestreo (cada 5 segundos)
-			time.Sleep(5 * time.Second)
-		}
-	}()
-
-	// Crea un nuevo Mux
+	// 2. Definición del Mux (Declaración única)
 	mux := http.NewServeMux()
 
-	// --- RUTAS DE SALUD ---
+	// --- 3. REGISTRO DE RUTAS (Todas juntas, antes de iniciar el servidor) ---
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Córtex Buzón Online - Operativo"))
 	})
-
-	// --- RUTAS PROTEGIDAS POR CORS ---
 
 	mux.HandleFunc("/api/purga", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
@@ -159,257 +129,151 @@ func main() {
 	mux.HandleFunc("/api/ordenar", corsMiddleware(recibirMensajeExterno))
 	mux.HandleFunc("/api/upload_modular", corsMiddleware(recibirFragmentoModular))
 
-	// Esta ruta unificada entrega lo que Kimi ha respondido y lo que el Buzón tiene listo
-	// Definimos la lógica del handler en una variable o función para poder envolverla
-
-	// handlerSalida unifica la lectura de respuestas locales y pendientes
-	// Esta función debe sustituir a la que tenías en main.go
-
-	var handlerSalida = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/buzon/salida", SovereignCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
-
-		// 1. Cargar las respuestas desde el origen persistente
-		// ASEGÚRATE que dentro de cargarRespuestasKimi() la ruta sea "./storage/respuestas_kimi.json"
 		respuestas := cargarRespuestasKimi()
-
-		// DEBUG: Verificación en los logs del servidor para confirmar que hay datos
-		log.Printf("DEBUG [BUZÓN]: Leyendo respuestas... cantidad encontrada: %d", len(respuestas))
-
-		// 2. Cargar lo pendiente
 		pendientes := cargarDeDisco()
-
-		// 3. Empaquetar datos para el Frontend
-		data := map[string]interface{}{
-			"items":      respuestas,
-			"pendientes": pendientes,
-			"source":     "nativa_local_linux",
-			"ts":         time.Now().Format(time.RFC3339),
-		}
-
-		// 4. Configurar respuesta
+		data := map[string]interface{}{"items": respuestas, "pendientes": pendientes, "source": "nativa_local_linux", "ts": time.Now().Format(time.RFC3339)}
 		w.Header().Set("Content-Type", "application/json")
-
-		// 5. Codificar y enviar
-		if err := json.NewEncoder(w).Encode(data); err != nil {
-			log.Printf("❌ [BUZÓN]: Error crítico al serializar respuesta: %v", err)
-			http.Error(w, "Error interno de persistencia", http.StatusInternalServerError)
-			return
-		}
-
-		// 6. Confirmación de entrega
-		log.Printf("📡 [BUZÓN]: Salida entregada. Items: %d, Pendientes: %d", len(respuestas), len(pendientes))
-	})
-
-	// Aplicamos el middleware aquí
-	mux.Handle("/api/buzon/salida", SovereignCORS(handlerSalida))
+		json.NewEncoder(w).Encode(data)
+	})))
 
 	mux.HandleFunc("/api/marcar_procesando", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		// 1. Obtención y validación del ID
-		idStr := r.URL.Query().Get("id")
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			log.Printf("❌ [MÉDULA]: ID inválido recibido: %s", idStr)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
+		id, _ := strconv.Atoi(r.URL.Query().Get("id"))
 		mu.Lock()
 		lista := cargarDeDisco()
 		mensajeContenido := ""
 		encontrado := false
-
-		// 2. Actualización de estado en la Médula
 		for i := range lista {
 			if lista[i].ID == id {
 				lista[i].Estado = "PROCESSING"
 				lista[i].UpdatedAt = time.Now()
 				mensajeContenido = lista[i].Mensaje
 				encontrado = true
-				break // Salimos del bucle al encontrarlo
+				break
 			}
 		}
-
 		if !encontrado {
 			mu.Unlock()
-			log.Printf("⚠️ [MÉDULA]: Intento de procesar ID inexistente #%d", id)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-
-		// 3. Persistimos el cambio antes de liberar el lock
 		guardarEnDisco(lista)
 		mu.Unlock()
-
-		// 4. Disparo del puente cognitivo
-		// Ejecutamos esto fuera del lock para no bloquear el servidor mientras Kimi trabaja
-		go func(id int, contenido string) {
-			log.Printf("🚀 [CORTEX]: Iniciando procesamiento automático para ID #%d", id)
-			generarRespuestaKimi(id, contenido)
-		}(id, mensajeContenido)
-
-		// 5. Respuesta inmediata al cliente
-		w.Header().Set("Content-Type", "application/json")
+		go generarRespuestaKimi(id, mensajeContenido)
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(fmt.Sprintf(`{"status":"success", "message":"Procesando ID %d"}`, id)))
 	}))
 
 	mux.HandleFunc("/api/cortex/ultimo-pulso", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		// Aquí defines la "frecuencia" o "vórtice" de tu sistema
-		data := map[string]interface{}{
-			"frecuencia": 432.169, // Valor base de tu SNC
-			"vortice":    0.0972,
-			"status":     "ONLINE",
-			"timestamp":  time.Now().Unix(),
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(data)
+		json.NewEncoder(w).Encode(map[string]interface{}{"frecuencia": 432.169, "status": "ONLINE"})
 	}))
 
 	mux.HandleFunc("/api/verificar-adn", corsMiddleware(verificarADN))
 	mux.HandleFunc("/api/ingestar-cromosomas", corsMiddleware(ingestarCromosomas))
-
-	// --- RUTA DE INYECCIÓN DE KIMI (EL BYPASS SOBERANO) ---
 	mux.HandleFunc("/api/buzon/entrada", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		var m Mensaje
-		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
-			http.Error(w, "Error decodificando inyección", http.StatusBadRequest)
-			return
-		}
-
-		// Llamamos a la función que guarda la respuesta de Kimi en la Médula
+		json.NewDecoder(r.Body).Decode(&m)
 		agregarAlHistorial(m)
-
 		w.WriteHeader(http.StatusAccepted)
-		log.Printf("📥 [BUZÓN]: Inyección recibida de %s", m.Entidad)
 	}))
 
 	mux.HandleFunc("/api/radar-pulse", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		// 1. Headers necesarios para que EventSource entienda que es un stream
 		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
-		// 2. Formato esperado por EventSource: "data: <json>\n\n"
-		data := map[string]interface{}{
-			"status":     "Cortex Online",
-			"satelites":  []string{"NODO_A", "NODO_B"},
-			"frecuencia": 432.00,
-		}
-		jsonData, _ := json.Marshal(data)
-
-		// Enviamos el pulso
-		fmt.Fprintf(w, "data: %s\n\n", jsonData)
-		w.(http.Flusher).Flush() // Fuerza el envío inmediato
+		fmt.Fprintf(w, "data: {\"status\":\"Cortex Online\"}\n\n")
+		w.(http.Flusher).Flush()
 	}))
 
-	// En el main, modifica el handler /api/estado-global:
-
 	mux.HandleFunc("/api/estado-global", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		// 1. Obtener estado de sincronización
 		mu.Lock()
 		estaOnline := time.Since(ultimoPulsoLocal) < 30*time.Second
 		mu.Unlock()
-
-		// 2. Inicializar Lattice con Nodo Base
-		listaSatelites := []ObjetoLattice{
-			{Name: "NODO_AVELLANEDA", Azimuth: 45, Altitud: 0},
-		}
-
-		// 3. Inyección dinámica de telemetría externa
-		trackingData := obtenerDatosTrackingReal()
-		if len(trackingData) > 0 {
-			listaSatelites = append(listaSatelites, trackingData...)
-		}
-
-		// 4. Resolver estado operativo
-		estadoFinal := "OFFLINE"
-		if estaOnline {
-			estadoFinal = "ONLINE"
-		}
-
-		// 5. Compilar paquete de datos oficial
-		data := map[string]interface{}{
-			"status":     estadoFinal,
-			"frecuencia": 432.17,
-			"satelites":  listaSatelites,
-			"timestamp":  time.Now().Unix(),
-			"hash_adn":   "432-BETA-77",
-			"mode":       "IRON_GRID_ACTIVE",
-		}
-
-		// --- CALIBRACIÓN: LOGUEAR LO QUE ESTAMOS ENVIANDO AL RADAR ---
-		log.Printf("DEBUG [CALIBRACIÓN]: Enviando %d satélites/objetos al frontend", len(listaSatelites))
-		for _, s := range listaSatelites {
-			log.Printf("DEBUG [SATELLITE]: %s - Az: %.2f, Alt: %.2f", s.Name, s.Azimuth, s.Altitud)
-		}
-		// -------------------------------------------------------------
-
-		// 6. Transmisión
+		data := map[string]interface{}{"status": map[bool]string{true: "ONLINE", false: "OFFLINE"}[estaOnline], "frecuencia": 432.17, "mode": "IRON_GRID_ACTIVE"}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(data)
 	}))
 
-	// AGREGA ESTA NUEVA RUTA: Tu Linux local llamará a esto cada 5-10 segundos
 	mux.HandleFunc("/api/heartbeat", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		ultimoPulsoLocal = time.Now() // Actualizamos el timestamp cada vez que el local nos avisa
+		ultimoPulsoLocal = time.Now()
 		mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	mux.HandleFunc("/api/telemetria", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		var datos Telemetria // Ya no dará error, porque ya declaramos el tipo Telemetria
-
-		if err := json.NewDecoder(r.Body).Decode(&datos); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		actualizarEstadoTelemetria(datos) // Ya no dará error, porque ya declaramos la función
-
+		var datos Telemetria
+		json.NewDecoder(r.Body).Decode(&datos)
+		actualizarEstadoTelemetria(datos)
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte("Telemetria recibida y procesada"))
 	}))
 
-	// Habilitar el script de despertar para nodos móviles
 	mux.HandleFunc("/despertar.sh", func(w http.ResponseWriter, r *http.Request) {
-		// Establecer tipo de contenido como shell script
 		w.Header().Set("Content-Type", "text/x-shellscript")
 		http.ServeFile(w, r, "despertar.sh")
 	})
+	mux.HandleFunc("/descargar/geochat-movil", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "geochat-movil") })
 
-	mux.HandleFunc("/descargar/geochat-movil", func(w http.ResponseWriter, r *http.Request) {
-		// Intentamos buscar en el directorio donde reside el ejecutable
-		// O simplemente en la raíz relativa "./"
-		filename := "geochat-movil"
+	// --- 4. INICIAR SERVICIOS EN BACKGROUND ---
+	go escucharSocketBuzon()
 
-		// Forzamos la descarga del archivo como binario
-		w.Header().Set("Content-Disposition", "attachment; filename=geochat-movil")
-		w.Header().Set("Content-Type", "application/octet-stream")
+	go func() {
+		ln, _ := net.Listen("tcp", ":10000")
+		defer ln.Close()
+		for {
+			conn, _ := ln.Accept()
+			go func(c net.Conn) {
+				defer c.Close()
+				scanner := bufio.NewScanner(c)
+				for scanner.Scan() {
+					log.Printf("📡 [RELÉ]: Nodo activo: %s", scanner.Text())
+				}
+			}(conn)
+		}
+	}()
 
-		http.ServeFile(w, r, filename)
-	})
+	// --- MOTOR DE SENSADO CONTINUO (EL CÓRTEX VIVO) ---
+	go func() {
+		log.Println("🧠 [CÓRTEX]: Iniciando motor de sensado de entorno...")
 
+		for {
+			// 1. Lectura de sensores (Input físico)
+			actividad := obtenerActividadRaton()
+			satelites := obtenerDatosTrackingReal()
 
+			// 2. Lógica de razonamiento autónomo
+			// Si detectamos actividad, optimizamos la Iron Grid
+			if actividad != "idle" {
+				log.Printf("⚡ [CÓRTEX]: Actividad detectada (%s). Optimizando Iron Grid...", actividad)
+				// Aquí podrías disparar una señal de alta prioridad si fuera necesario
+			}
 
-	// --- INICIALIZACIÓN DE SERVIDOR ---------------------------------
+			// 3. Empaquetado y sincronización del estado vital
+			// Aseguramos que la Telemetria sea el reflejo fiel del nodo
+			datos := Telemetria{
+				Nodo:      "Avellaneda",
+				Temp:      25.0, // Valor base, a futuro puede integrarse con sensores de hardware
+				Load:      0.1,  // Carga del sistema
+				Input:     actividad,
+				Satelites: satelites,
+			}
+
+			// 4. Inyección al bus de datos global
+			// Esto es lo que el Radar lee y lo que permite la Armonización
+			actualizarEstadoTelemetria(datos)
+
+			// 5. Ciclo de respiración (5 segundos)
+			time.Sleep(5 * time.Second)
+		}
+	}()
+
+	// --- 5. INICIAR SERVIDOR HTTP (Bloqueante, última instrucción) ---
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "10000"
 	}
-
 	log.Printf("🚀 Córtex Buzón Online escuchando en :%s", port)
-
-	server := &http.Server{
-		Addr:    "0.0.0.0:" + port,
-		Handler: mux,
-	}
-	log.Fatal(server.ListenAndServe())
+	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, mux))
 }
-
 
 func escucharSocketBuzon() {
 	// Definimos la ruta de forma inteligente
@@ -461,7 +325,7 @@ func handleInterferencia(conn net.Conn) {
 	nuevaAmenaza := ObjetoLattice{
 		Name:    fmt.Sprintf("AMENAZA: %s", msg["target"]),
 		Azimuth: 0, // Puedes calcularlo basado en el tipo de ataque si quieres
-		Altitud: 0, 
+		Altitud: 0,
 	}
 
 	muAmenazas.Lock()
@@ -489,7 +353,7 @@ func obtenerDatosTrackingReal() []ObjetoLattice {
 			Name      string  `json:"name"`
 			Longitude float64 `json:"longitude"`
 		}
-		
+
 		if err := json.NewDecoder(respSats.Body).Decode(&iss); err == nil {
 			azimut := float64(int(iss.Longitude) % 360)
 			lista = append(lista, ObjetoLattice{
@@ -511,39 +375,40 @@ func obtenerDatosTrackingReal() []ObjetoLattice {
 	return lista
 }
 
-
 // Extraemos la lógica de OpenSky para mantener la armonía
 func fetchOpenSky() []ObjetoLattice {
-    var lista []ObjetoLattice
-    timestamp := time.Now().Unix()
+	var lista []ObjetoLattice
+	timestamp := time.Now().Unix()
 
-    // 1. Simulación de 3 Aviones (Vuelo dinámico, Altitud comercial)
-    for i := 0; i < 3; i++ {
-        offset := float64(timestamp % 360)
-        azimuth := (float64(i) * 120.0) + offset
-        if azimuth > 360 { azimuth -= 360 }
+	// 1. Simulación de 3 Aviones (Vuelo dinámico, Altitud comercial)
+	for i := 0; i < 3; i++ {
+		offset := float64(timestamp % 360)
+		azimuth := (float64(i) * 120.0) + offset
+		if azimuth > 360 {
+			azimuth -= 360
+		}
 
-        lista = append(lista, ObjetoLattice{
-            Name:    "AVION-" + strconv.Itoa(i+1),
-            Azimuth: azimuth,
-            Altitud: 10000.0 + float64(i*500), // Altitud comercial
-        })
-    }
+		lista = append(lista, ObjetoLattice{
+			Name:    "AVION-" + strconv.Itoa(i+1),
+			Azimuth: azimuth,
+			Altitud: 10000.0 + float64(i*500), // Altitud comercial
+		})
+	}
 
-    // 2. Simulación de 3 Satélites (Órbita alta, Azimut constante/lento)
-    for i := 0; i < 3; i++ {
-        // Los satélites se mueven mucho más lento o parecen estar en posición fija respecto a tierra
-        azimuth := (float64(i) * 45.0) + 180.0 
-        
-        lista = append(lista, ObjetoLattice{
-            Name:    "SAT-GEO-" + strconv.Itoa(i+1),
-            Azimuth: azimuth,
-            Altitud: 500000.0 + float64(i*10000), // Altitud orbital (LEO)
-        })
-    }
-    
-    log.Printf("DEBUG [RADAR]: Simulación activa. Generando %d objetos (Aviones + Satélites).", len(lista))
-    return lista
+	// 2. Simulación de 3 Satélites (Órbita alta, Azimut constante/lento)
+	for i := 0; i < 3; i++ {
+		// Los satélites se mueven mucho más lento o parecen estar en posición fija respecto a tierra
+		azimuth := (float64(i) * 45.0) + 180.0
+
+		lista = append(lista, ObjetoLattice{
+			Name:    "SAT-GEO-" + strconv.Itoa(i+1),
+			Azimuth: azimuth,
+			Altitud: 500000.0 + float64(i*10000), // Altitud orbital (LEO)
+		})
+	}
+
+	log.Printf("DEBUG [RADAR]: Simulación activa. Generando %d objetos (Aviones + Satélites).", len(lista))
+	return lista
 }
 
 // Captura actividad básica (ejemplo: detectar eventos en /dev/input)

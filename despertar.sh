@@ -1,53 +1,64 @@
 #!/bin/bash
 
-# --- Configuración y Sincronización ---
-# Definimos variables de entorno para el ecosistema
+# ==============================================================================
+# GEOCHAT - Protocolo de Despertar Soberano (Bootstrap Maestro)
+# Función: Instalación, Sincronización y Orquestación del Nodo
+# ==============================================================================
+
+# --- Configuración del Ecosistema ---
 export GEOCHAT_RESONANCE=432
 BINARIO_NOMBRE="geochat-movil"
 DESTINO="$HOME/$BINARIO_NOMBRE"
+REPO_URL="https://github.com/MaxAltamirano/geochat-buzon.git"
+RENDER_IP="tu-app.onrender.com" 
+RENDER_PORT="10000" 
+LATITUD="-34.75"
+LONGITUD="-58.35"
 
-echo "======================================================"
-echo "🧬 INICIANDO SINCRONIZACIÓN SOBERANA DE GEOCHAT 🧬"
-echo "======================================================"
+echo "🧬 [SISTEMA] Iniciando despliegue autónomo (Frecuencia: ${GEOCHAT_RESONANCE}Hz)..."
 
-if command -v pkg > /dev/null; then pkg install curl -y; elif command -v apt > /dev/null; then sudo apt install curl -y; fi
+# 1. Verificación de Dependencias Base (Git, Curl, Netcat)
+for cmd in git curl nc; do
+    if ! command -v $cmd &> /dev/null; then
+        echo "⚠️ [INFO] Instalando dependencia: $cmd"
+        if command -v pkg > /dev/null; then pkg install $cmd -y; elif command -v apt > /dev/null; then sudo apt install $cmd -y; fi
+    fi
+done
 
-# 1. Detección y Configuración de Entorno
+# 2. Sincronización del Ecosistema (Repositorio)
+if [ ! -d "geochat-buzon" ]; then
+    echo "🌐 [STATUS] Clonando ecosistema soberano..."
+    git clone "$REPO_URL" || { echo "[ERROR] Fallo al clonar."; exit 1; }
+fi
+
+# 3. Gestión Dinámica del Binario (Córtex)
 if [ -d "/data/data/com.termux" ]; then
-    echo "[INFO] Entorno Termux (ARM64) detectado."
-    # URL del binario compilado para ARM64
     URL_DESCARGA="https://github.com/MaxAltamirano/geochat-buzon/releases/download/v1.0.0/geochat-movil-android"
 else
-    echo "[INFO] Entorno Linux (x86_64) detectado."
-    # URL del binario compilado para x86_64
     URL_DESCARGA="https://github.com/MaxAltamirano/geochat-buzon/releases/download/v1.0.0/geochat-movil"
 fi
 
-# 2. Gestión del Binario (El Corazón del Córtex)
 if [ ! -f "$DESTINO" ]; then
-    echo "[STATUS] Binario no encontrado. Descargando desde el Buzón Soberano..."
-    curl -sL "$URL_DESCARGA" -o "$DESTINO"
-    
-    if [ $? -eq 0 ]; then
-        echo "[SUCCESS] Binario descargado exitosamente."
-    else
-        echo "[ERROR] Fallo en la conexión. URL: $URL_DESCARGA"
-        exit 1
-    fi
-else
-    echo "[STATUS] Binario localizado en: $DESTINO"
+    echo "[STATUS] Descargando Córtex desde el Buzón Soberano..."
+    curl -sL "$URL_DESCARGA" -o "$DESTINO" || { echo "[ERROR] Descarga fallida."; exit 1; }
 fi
-
-# 3. Aplicación de Permisos y Resonancia
 chmod +x "$DESTINO"
 
-echo "[INFO] Estableciendo frecuencia de resonancia a ${GEOCHAT_RESONANCE}Hz..."
-echo "[INFO] Desplegando Córtex..."
-
-# 4. Inicialización del Sistema
-# Usamos ./cortex --init o ejecutamos directamente el binario según arquitectura
+# 4. Inicialización del Núcleo
+echo "[STATUS] Desplegando Córtex..."
 "$DESTINO" --init
 
+# 5. Orquestador de Relé (Daemon de Resonancia)
+echo "[RELE] Activando enlace de resonancia hacia Render..."
+(
+    while true; do
+        TELEMETRIA=$(printf '{"node_id": "SAM_MAX_01", "status": "GATEWAY_READY", "mesh_grid": "IRON_GRID_ACTIVE", "location": {"lat": %s, "lon": %s}, "relay_port": 10000}' "$LATITUD" "$LONGITUD")
+        echo "$TELEMETRIA" | nc -w 2 "$RENDER_IP" "$RENDER_PORT"
+        sleep 10
+    done
+) &
+
 echo "======================================================"
-echo "✅ ADN GeoChat sincronizado. Sistema operativo."
+echo "✅ ADN GeoChat Sincronizado y Armonizado."
+echo "✅ Nodo Móvil operando como Gateway (SAM_MAX_01)."
 echo "======================================================"
