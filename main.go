@@ -133,7 +133,8 @@ func main() {
 
 	// Relé de Nodos
 	go func() {
-		ln, err := net.Listen("tcp", ":10000")
+		//ln, err := net.Listen("tcp", ":10000")
+		ln, err := net.Listen("tcp", "0.0.0.0:10000") // Escuchar en todas las interfaces
 		if err != nil {
 			log.Printf("❌ [RELÉ]: Error al iniciar socket: %v", err)
 			return
