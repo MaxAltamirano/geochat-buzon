@@ -233,16 +233,28 @@ func main() {
 
 	// --- MOTOR DE SENSADO CONTINUO (EL CÓRTEX VIVO) ---
 	go func() {
+		// Bloque de recuperación: asegura la inmortalidad del proceso en Render
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("⚠️ [CÓRTEX]: Recuperado de pánico: %v", r)
+			}
+		}()
+
 		log.Println("🧠 [CÓRTEX]: Iniciando motor de sensado...")
+
 		for {
+			// 1. Sensado Seguro
 			actividad := obtenerActividadRaton()
+
+			// 2. Obtención de datos con validación profunda
 			satelites := obtenerDatosTrackingReal()
 
-			// BLINDAJE: Si satelites es nil, inicialízalo para evitar el crash
+			// Blindaje final: Asegurar que el slice nunca sea nil
 			if satelites == nil {
-				satelites = []ObjetoLattice{}
+				satelites = make([]ObjetoLattice, 0)
 			}
 
+			// 3. Creación del paquete de telemetría
 			datos := Telemetria{
 				Nodo:      "Avellaneda",
 				Temp:      25.0,
@@ -251,7 +263,9 @@ func main() {
 				Satelites: satelites,
 			}
 
+			// 4. Inyección al estado
 			actualizarEstadoTelemetria(datos)
+
 			time.Sleep(5 * time.Second)
 		}
 	}()
