@@ -412,9 +412,19 @@ func main() {
 
 
 func escucharSocketBuzon() {
+	// Definimos la ruta de forma inteligente
+	socketPath := os.Getenv("GEOCHAT_SOCKET_PATH")
 
-	// Cambia la ruta a una que sea propiedad de Termux
-	socketPath := "/data/data/com.termux/files/home/.geochat_buzon.sock"
+	// Si la variable no está definida, usamos un valor por defecto seguro
+	if socketPath == "" {
+		if _, err := os.Stat("/data/data/com.termux"); err == nil {
+			// Estamos en Termux (Móvil)
+			socketPath = "/data/data/com.termux/files/home/.geochat_buzon.sock"
+		} else {
+			// Estamos en cualquier otro lugar (Render, Linux, PC)
+			socketPath = "./.geochat_buzon.sock"
+		}
+	}
 
 	// Limpiar si el socket ya existe por un crash previo
 	os.Remove(socketPath)
@@ -425,7 +435,7 @@ func escucharSocketBuzon() {
 	}
 	defer listener.Close()
 
-	log.Println("📡 [RADAR]: Buzón escuchando en /tmp/geochat_buzon.sock")
+	log.Printf("📡 [RADAR]: Buzón escuchando en %s", socketPath)
 
 	for {
 		conn, err := listener.Accept()
