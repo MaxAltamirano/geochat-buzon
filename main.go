@@ -233,35 +233,25 @@ func main() {
 
 	// --- MOTOR DE SENSADO CONTINUO (EL CÓRTEX VIVO) ---
 	go func() {
-		log.Println("🧠 [CÓRTEX]: Iniciando motor de sensado de entorno...")
-
+		log.Println("🧠 [CÓRTEX]: Iniciando motor de sensado...")
 		for {
-			// 1. Lectura de sensores (Input físico)
 			actividad := obtenerActividadRaton()
 			satelites := obtenerDatosTrackingReal()
 
-			// 2. Lógica de razonamiento autónomo
-			// Si detectamos actividad, optimizamos la Iron Grid
-			if actividad != "idle" {
-				log.Printf("⚡ [CÓRTEX]: Actividad detectada (%s). Optimizando Iron Grid...", actividad)
-				// Aquí podrías disparar una señal de alta prioridad si fuera necesario
+			// BLINDAJE: Si satelites es nil, inicialízalo para evitar el crash
+			if satelites == nil {
+				satelites = []ObjetoLattice{}
 			}
 
-			// 3. Empaquetado y sincronización del estado vital
-			// Aseguramos que la Telemetria sea el reflejo fiel del nodo
 			datos := Telemetria{
 				Nodo:      "Avellaneda",
-				Temp:      25.0, // Valor base, a futuro puede integrarse con sensores de hardware
-				Load:      0.1,  // Carga del sistema
+				Temp:      25.0,
+				Load:      0.1,
 				Input:     actividad,
 				Satelites: satelites,
 			}
 
-			// 4. Inyección al bus de datos global
-			// Esto es lo que el Radar lee y lo que permite la Armonización
 			actualizarEstadoTelemetria(datos)
-
-			// 5. Ciclo de respiración (5 segundos)
 			time.Sleep(5 * time.Second)
 		}
 	}()
