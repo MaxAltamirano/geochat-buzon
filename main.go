@@ -412,8 +412,10 @@ func main() {
 
 
 func escucharSocketBuzon() {
-	socketPath := "/tmp/geochat_buzon.sock"
-	
+
+	// Cambia la ruta a una que sea propiedad de Termux
+	socketPath := "/data/data/com.termux/files/home/.geochat_buzon.sock"
+
 	// Limpiar si el socket ya existe por un crash previo
 	os.Remove(socketPath)
 
