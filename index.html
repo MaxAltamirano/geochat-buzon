@@ -234,33 +234,31 @@
 
                 if (!res.ok) throw new Error("Servidor offline");
 
-                const data = await res.json();
                 const ahora = Math.floor(Date.now() / 1000);
-
-                // Validación de frescura: El nodo debe reportar telemetría dentro de los últimos 60 segundos
                 const timestampNodo = data.timestamp || ahora;
                 const esFresco = (ahora - timestampNodo) < 60;
 
+
                 // Lógica de transición: Si los datos existen y son frescos, el motor es operativo
                 // Dentro de monitorPulse, cuando el fetch tiene éxito:
-                if (data && esFresco) {
-                    console.log("🔱 [SNC]: Pulso detectado. Estado:", data.status || "SYNCING");
+                if (data && esFresco && (data.status === "ONLINE" || data.status === "SYNCING")) {
+                    console.log("🔱 [SNC]: Pulso operativo detectado (Estado:", data.status, ")");
 
-                    // 1. Aseguramos el estado visual
+                    // 1. Aseguramos el estado visual global
                     if (!document.body.classList.contains('estado-online')) {
                         document.body.classList.add('estado-online');
                     }
 
-                    // 2. Activamos la capa online
+                    // 2. Activamos la capa visual online
                     activarModoOnline();
 
-                    // 3. Inyección directa de telemetría al motor del radar
-                    if (window.updateRadarData) {
+                    // 3. Inyección directa de telemetría al motor del radar (solo si existe)
+                    if (typeof window.updateRadarData === 'function') {
                         window.updateRadarData(data);
                     }
                 } else {
-                    // Si los datos son viejos o inválidos, forzamos offline
-                    console.warn("⚠️ [SNC]: Nodo fuera de latencia operativa. Forzando modo offline.");
+                    // Si los datos son viejos, inválidos o el estado es desconocido
+                    console.warn("⚠️ [SNC]: Nodo fuera de latencia operativa o estado desconocido. Forzando modo offline.");
                     forzarOffline();
                 }
             } catch (e) {
