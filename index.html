@@ -242,15 +242,24 @@
                 const esFresco = (ahora - timestampNodo) < 60;
 
                 // Lógica de transición: Si los datos existen y son frescos, el motor es operativo
+                // Dentro de monitorPulse, cuando el fetch tiene éxito:
                 if (data && esFresco) {
                     console.log("🔱 [SNC]: Pulso detectado. Estado:", data.status || "SYNCING");
 
+                    // 1. Aseguramos el estado visual
                     if (!document.body.classList.contains('estado-online')) {
                         document.body.classList.add('estado-online');
                     }
 
+                    // 2. Activamos la capa online
                     activarModoOnline();
+
+                    // 3. Inyección directa de telemetría al motor del radar
+                    if (window.updateRadarData) {
+                        window.updateRadarData(data);
+                    }
                 } else {
+                    // Si los datos son viejos o inválidos, forzamos offline
                     console.warn("⚠️ [SNC]: Nodo fuera de latencia operativa. Forzando modo offline.");
                     forzarOffline();
                 }
@@ -291,14 +300,53 @@
             }
         }
 
+        /**
+ * 🔄 CONMUTADOR DE ESTADO SOBERANO [SNC]
+ * Gestiona la transición visual entre modo Online y Offline.
+ */
         function forzarOffline() {
             const off = document.getElementById('capa-offline');
             const on = document.getElementById('capa-online');
-            if (on.classList.contains("visible")) {
-                on.classList.replace("visible", "oculto");
-                off.classList.replace("oculto", "visible");
+            const visor = document.getElementById('visor-telemetria');
+
+            // 1. Transición de visibilidad de capas
+            if (on && off) {
+                if (on.classList.contains("visible")) {
+                    on.classList.replace("visible", "oculto");
+                }
+                if (off.classList.contains("oculto")) {
+                    off.classList.replace("oculto", "visible");
+                }
             }
+
+            // 2. Limpieza de telemetría y feedback visual
+            if (visor) {
+                visor.innerHTML = `<div class="log-entry" style="color: #ff3300;">[ MODO OFFLINE: ESPERANDO PULSO... ]</div>`;
+            }
+
+            // 3. Log de seguridad en consola
+            console.log("⚠️ [SNC]: Sistema en modo espera (Offline). Lattice desconectado.");
         }
+
+        /**
+         * 🟢 COMPLEMENTO: forzarOnline()
+         * Para cuando el pulso retorna y necesitas activar la vista.
+         */
+        function forzarOnline() {
+            const off = document.getElementById('capa-offline');
+            const on = document.getElementById('capa-online');
+
+            if (on && off) {
+                if (off.classList.contains("visible")) {
+                    off.classList.replace("visible", "oculto");
+                }
+                if (on.classList.contains("oculto")) {
+                    on.classList.replace("oculto", "visible");
+                }
+            }
+            console.log("🔱 [SNC]: Sistema en modo ONLINE. Lattice activo.");
+        }
+
 
         function copiarComando() {
             navigator.clipboard.writeText(document.getElementById('cmd-text').innerText);
