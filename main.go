@@ -139,6 +139,7 @@ func main() {
 	mux.HandleFunc("/api/fragmento", corsMiddleware(recibirFragmentoModular))
 	mux.HandleFunc("/api/verificar-adn", corsMiddleware(verificarADN))
 	mux.HandleFunc("/api/ingestar", corsMiddleware(ingestarCromosomas))
+	mux.HandleFunc("/api/estado-global", handleEstadoGlobal)
 	// (Mantén tus otras rutas aquí tal cual las tenías)
 
 	// --- 3. SERVICIOS EN BACKGROUND ---
@@ -208,17 +209,17 @@ func main() {
 	// --- 4. MOTOR DE SENSADO BLINDADO (El Córtex Vivo) ---
 	go iniciarMotorSensado()
 
-	// --- 5. INICIAR SERVIDOR HTTP ---
-	port := os.Getenv("PORT")
+// --- 5. INICIAR SERVIDOR HTTP (CONFIGURACIÓN SOBERANA) ---
+	port := os.Getenv("PORT") // Render inyecta su puerto aquí
 	if port == "" {
 		port = "10000" // Valor por defecto para entorno local
 	}
 
 	log.Printf("🚀 Córtex Buzón Online escuchando en puerto :%s", port)
 	
-	// IMPORTANTE: Aquí pasamos 'mux' directamente, SIN corsMiddleware
+	// El puerto es dinámico para ajustarse a la infraestructura de Render
 	server := &http.Server{
-		Addr:    ":" + port,
+		Addr:    ":" + port, 
 		Handler: mux, 
 	}
     
