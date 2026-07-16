@@ -39,13 +39,20 @@ type ObjetoLattice struct {
 	Altitud float64 `json:"altitud"`
 }
 
+type Satelite struct {
+	Name    string  `json:"name"`
+	Azimuth float64 `json:"azimuth"`
+	Altitud float64 `json:"altitud"`
+}
+
 // --- ESTRUCTURA DEL PULSO VITAL (TELEMETRÍA) ---
 type Telemetria struct {
-	Nodo      string  `json:"nodo"`
-	Temp      float64 `json:"temp"`
-	Load      float64 `json:"load"`
-	Input     string  `json:"input_activity"`
-	Satelites []ObjetoLattice
+	Nodo          string  `json:"nodo"`
+	Status        string  `json:"status"`         // <-- Asegúrate de incluir esta línea
+	InputActivity string  `json:"input_activity"` // Mover los strings juntos ayuda a la alineación
+	Temp          float64 `json:"temp"`
+	Load          float64 `json:"load"`
+	Satelites []ObjetoLattice `json:"Satelites"` // <-- Cambiado aquí
 }
 
 // Variable global para guardar el último estado recibido
@@ -209,44 +216,42 @@ func main() {
 	// --- 4. MOTOR DE SENSADO BLINDADO (El Córtex Vivo) ---
 	go iniciarMotorSensado()
 
-// --- 5. INICIAR SERVIDOR HTTP (CONFIGURACIÓN SOBERANA) ---
+	// --- 5. INICIAR SERVIDOR HTTP (CONFIGURACIÓN SOBERANA) ---
 	port := os.Getenv("PORT") // Render inyecta su puerto aquí
 	if port == "" {
 		port = "10000" // Valor por defecto para entorno local
 	}
 
 	log.Printf("🚀 Córtex Buzón Online escuchando en puerto :%s", port)
-	
+
 	// El puerto es dinámico para ajustarse a la infraestructura de Render
 	server := &http.Server{
-		Addr:    ":" + port, 
-		Handler: mux, 
+		Addr:    ":" + port,
+		Handler: mux,
 	}
-    
+
 	log.Fatal(server.ListenAndServe())
 }
 
-
-
 func handleEstadoGlobal(w http.ResponseWriter, r *http.Request) {
-    // Definir explícitamente las políticas de acceso soberano
-    w.Header().Set("Access-Control-Allow-Origin", "*")
-    w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-    w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	// Definir explícitamente las políticas de acceso soberano
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-    // Manejo de la petición de pre-vuelo (OPTIONS) para evitar bloqueos del navegador
-    if r.Method == http.MethodOptions {
-        w.WriteHeader(http.StatusOK)
-        return
-    }
+	// Manejo de la petición de pre-vuelo (OPTIONS) para evitar bloqueos del navegador
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
-    // Lógica protegida por Mutex para garantizar la integridad de la telemetría
-    muTelemetria.Lock()
-    datos := ultimaTelemetria
-    muTelemetria.Unlock()
+	// Lógica protegida por Mutex para garantizar la integridad de la telemetría
+	muTelemetria.Lock()
+	datos := ultimaTelemetria
+	muTelemetria.Unlock()
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(datos)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(datos)
 }
 
 // Función profesional para el Motor
@@ -272,11 +277,12 @@ func iniciarMotorSensado() {
 
 		// Datos de telemetría inyectados en el estado global
 		datos := Telemetria{
-			Nodo:      "Avellaneda",
-			Temp:      25.0,
-			Load:      0.1,
-			Input:     actividad,
-			Satelites: satelites,
+			Nodo:          "Avellaneda",
+			Status:        "SYNCING",
+			Temp:          25.0,
+			Load:          0.1,
+			InputActivity: actividad, // Cambiamos 'Input' por 'InputActivity'
+			Satelites:     satelites,
 		}
 
 		// Actualizamos el estado del sistema

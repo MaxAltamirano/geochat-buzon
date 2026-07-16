@@ -241,20 +241,29 @@
             }
         }
 
+
+        // Variable de control global (asegúrate de declararla fuera de la función)
+        let motorIniciado = false;
+
         function activarModoOnline() {
             const off = document.getElementById('capa-offline');
             const on = document.getElementById('capa-online');
 
+            // Verificamos existencia y estado actual para evitar ejecuciones redundantes
             if (off && on && off.classList.contains("visible")) {
+                // Ejecutamos la transición visual
                 off.classList.replace("visible", "oculto");
                 on.classList.replace("oculto", "visible");
 
-                // Retardo de 500ms para asegurar que el navegador ha renderizado
-                // el contenedor y que el canvas tiene dimensiones calculadas
+                // Transición lógica al modo online
+                console.log("🚀 [SNC]: Transición a modo ONLINE iniciada.");
+
+                // Retardo para asegurar dimensiones del canvas antes de iniciar el motor
                 setTimeout(() => {
-                    if (window.iniciarMotorRadar) {
-                        console.log("🚀 [SNC]: Iniciando motor...");
+                    if (!motorIniciado && window.iniciarMotorRadar) {
+                        console.log("🚀 [SNC]: Motor de radar activado exitosamente.");
                         window.iniciarMotorRadar();
+                        motorIniciado = true; // Marcamos como activo para prevenir re-inicialización
                     }
                 }, 500);
             }
