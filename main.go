@@ -211,34 +211,35 @@ func main() {
 	// --- 5. INICIAR SERVIDOR HTTP ---
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "10000"
+		port = "10000" // Valor por defecto para entorno local
 	}
 
 	log.Printf("🚀 Córtex Buzón Online escuchando en puerto :%s", port)
+	
+	// IMPORTANTE: Aquí pasamos 'mux' directamente, SIN corsMiddleware
 	server := &http.Server{
 		Addr:    ":" + port,
-		Handler: mux,
+		Handler: mux, 
 	}
-
+    
 	log.Fatal(server.ListenAndServe())
 }
 
 
 
-// En tu manejador de la ruta /api/estado-global:
 func handleEstadoGlobal(w http.ResponseWriter, r *http.Request) {
     // Definir explícitamente las políticas de acceso soberano
     w.Header().Set("Access-Control-Allow-Origin", "*")
     w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
     w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-    // Manejo de la petición de pre-vuelo (la clave para que el navegador no bloquee el fetch)
+    // Manejo de la petición de pre-vuelo (OPTIONS) para evitar bloqueos del navegador
     if r.Method == http.MethodOptions {
         w.WriteHeader(http.StatusOK)
         return
     }
 
-    // Lógica protegida por Mutex para telemetría
+    // Lógica protegida por Mutex para garantizar la integridad de la telemetría
     muTelemetria.Lock()
     datos := ultimaTelemetria
     muTelemetria.Unlock()
