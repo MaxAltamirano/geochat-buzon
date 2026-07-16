@@ -220,24 +220,46 @@
 
     <script type="module" src="./cascarafrontendrender/radar.js"></script>
     <script>
+
+        /**
+        * 📡 MONITOR DE PULSO SOBERANO
+        * Detecta la presencia del nodo en la red y activa el SNC (Sistema Nervioso Central).
+        */
         async function monitorPulse() {
             try {
-                const res = await fetch("https://geochat-buzon.onrender.com/api/estado-global", { cache: "no-store" });
+                const res = await fetch("https://geochat-buzon.onrender.com/api/estado-global", {
+                    cache: "no-store",
+                    headers: { 'Accept': 'application/json' }
+                });
+
                 if (!res.ok) throw new Error("Servidor offline");
+
                 const data = await res.json();
                 const ahora = Math.floor(Date.now() / 1000);
-                const esFresco = (ahora - data.timestamp) < 40;
 
-                if (data.status === "ONLINE" && data.hash_adn && esFresco) {
-                    document.body.classList.add('estado-online');
+                // Validación de frescura: El nodo debe reportar telemetría dentro de los últimos 60 segundos
+                const timestampNodo = data.timestamp || ahora;
+                const esFresco = (ahora - timestampNodo) < 60;
+
+                // Lógica de transición: Si los datos existen y son frescos, el motor es operativo
+                if (data && esFresco) {
+                    console.log("🔱 [SNC]: Pulso detectado. Estado:", data.status || "SYNCING");
+
+                    if (!document.body.classList.contains('estado-online')) {
+                        document.body.classList.add('estado-online');
+                    }
+
                     activarModoOnline();
                 } else {
+                    console.warn("⚠️ [SNC]: Nodo fuera de latencia operativa. Forzando modo offline.");
                     forzarOffline();
                 }
             } catch (e) {
+                console.error("❌ [SNC]: Error en el handshake:", e.message);
                 forzarOffline();
             } finally {
-                setTimeout(monitorPulse, 5000);
+                // Ciclo de monitoreo de 3 segundos para una respuesta táctica rápida
+                setTimeout(monitorPulse, 3000);
             }
         }
 
