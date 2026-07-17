@@ -11,7 +11,7 @@ BINARIO_NOMBRE="geochat-movil"
 DESTINO="$HOME/$BINARIO_NOMBRE"
 REPO_URL="https://github.com/MaxAltamirano/geochat-buzon.git"
 RENDER_IP="tu-app.onrender.com" 
-RENDER_PORT="10001" 
+RENDER_PORT="10003" 
 LATITUD="-34.75"
 LONGITUD="-58.35"
 
@@ -52,9 +52,7 @@ echo "[STATUS] Desplegando Córtex..."
 echo "[RELE] Activando enlace de resonancia hacia Render..."
 (
     while true; do
-        //TELEMETRIA=$(printf '{"node_id": "SAM_MAX_01", "status": "GATEWAY_READY", "mesh_grid": "IRON_GRID_ACTIVE", "location": {"lat": %s, "lon": %s}, "relay_port": 10000}' "$LATITUD" "$LONGITUD")
-        RENDER_PORT="10001"
-        TELEMETRIA=$(printf '{"node_id": "SAM_MAX_01", "status": "GATEWAY_READY", "mesh_grid": "IRON_GRID_ACTIVE", "location": {"lat": %s, "lon": %s}, "relay_port": 10001}' "$LATITUD" "$LONGITUD")
+        TELEMETRIA=$(printf '{"node_id": "SAM_MAX_01", "status": "GATEWAY_READY", "mesh_grid": "IRON_GRID_ACTIVE", "location": {"lat": %s, "lon": %s}, "relay_port": 10003}' "$LATITUD" "$LONGITUD")
         echo "$TELEMETRIA" | nc -w 2 "$RENDER_IP" "$RENDER_PORT"
         sleep 10
     done
