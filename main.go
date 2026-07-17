@@ -175,7 +175,6 @@ func main() {
 
 	// Relé de Nodos
 	go func() {
-		//ln, err := net.Listen("tcp", ":10000")
 		ln, err := net.Listen("tcp", "0.0.0.0:10001") // Escuchar en todas las interfaces
 		if err != nil {
 			log.Printf("❌ [RELÉ]: Error al iniciar socket: %v", err)
@@ -241,7 +240,7 @@ func main() {
 	// --- 5. INICIAR SERVIDOR HTTP (CONFIGURACIÓN SOBERANA) ---
 	port := os.Getenv("PORT") // Render inyecta su puerto aquí
 	if port == "" {
-		port = "10000" // Valor por defecto para entorno local
+		port = "10001" // Valor por defecto para entorno local
 	}
 
 	log.Printf("🚀 Córtex Buzón Online escuchando en puerto :%s", port)
