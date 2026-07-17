@@ -15,7 +15,9 @@ COPY . .
 
 # Compilación estática extrema: -s (quita tablas de símbolos) -w (quita info de debug)
 # Esto hace que el binario sea una "piedra" sólida e indestructible.
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o geochat-nexo main.go
+# RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o geochat-nexo main.go
+# Usa RUN para ejecutar el comando completo con la variable de entorno
+RUN CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build -o geochat-node main.go
 
 # --- ETAPA 2: Ejecución (El Organismo con IA y Sentidos) ---
 FROM python:3.11-slim-bookworm 
