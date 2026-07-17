@@ -47,12 +47,12 @@ type Satelite struct {
 
 // --- ESTRUCTURA DEL PULSO VITAL (TELEMETRÍA) ---
 type Telemetria struct {
-	Nodo          string  `json:"nodo"`
-	Status        string  `json:"status"`         // <-- Asegúrate de incluir esta línea
-	InputActivity string  `json:"input_activity"` // Mover los strings juntos ayuda a la alineación
-	Temp          float64 `json:"temp"`
-	Load          float64 `json:"load"`
-	Satelites []ObjetoLattice `json:"Satelites"` // <-- Cambiado aquí
+	Nodo          string          `json:"nodo"`
+	Status        string          `json:"status"`         // <-- Asegúrate de incluir esta línea
+	InputActivity string          `json:"input_activity"` // Mover los strings juntos ayuda a la alineación
+	Temp          float64         `json:"temp"`
+	Load          float64         `json:"load"`
+	Satelites     []ObjetoLattice `json:"Satelites"` // <-- Cambiado aquí
 }
 
 // Variable global para guardar el último estado recibido
@@ -125,10 +125,31 @@ func main() {
 	mux := http.NewServeMux()
 
 	// --- REGISTRO DE RUTAS ---
+
+	// 1. RUTA DE DESCARGA PRIORITARIA (El primero que llega, el primero que se sirve)
+	mux.HandleFunc("/descargar-binario", func(w http.ResponseWriter, r *http.Request) {
+		// Detección táctica: si viene por curl o pide binario explícito
+		userAgent := r.Header.Get("User-Agent")
+
+		// Si es un binario real, forzamos la descarga
+		// Asumiendo que tienes el binario en la carpeta raíz o ./storage/
+		archivoBinario := "./geochat-node"
+
+		log.Printf("📥 [SISTEMA]: Petición de binario detectada desde: %s", userAgent)
+
+		w.Header().Set("Content-Disposition", "attachment; filename=geochat-node")
+		w.Header().Set("Content-Type", "application/octet-stream")
+		http.ServeFile(w, r, archivoBinario)
+	})
+
+	// 2. RUTA RAÍZ (El Córtex, ahora solo actúa si no es una descarga)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Si alguien entra al raíz, responde el Córtex
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Córtex Buzón Online - Operativo"))
 	})
+
+	// ... (El resto de tus rutas /api/ siguen debajo, intactas)
 
 	// ... (Aquí irían tus otros mux.HandleFunc, los mantienes igual) ...
 	mux.HandleFunc("/api/purga", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -213,6 +234,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Evento guardado"))
 	}))
+
 	// --- 4. MOTOR DE SENSADO BLINDADO (El Córtex Vivo) ---
 	go iniciarMotorSensado()
 
