@@ -431,6 +431,12 @@ func actualizarEstadoTelemetria(datos Telemetria) {
 	muTelemetria.Lock()
 	defer muTelemetria.Unlock()
 	ultimaTelemetria = datos
+
+	// Sincronizar también con el estado global que consume el endpoint /api/estado-global
+	mu.Lock()
+	estadoMemoria["Satelites"] = datos.Satelites
+	estadoMemoria["input_activity"] = datos.InputActivity
+	mu.Unlock()
 }
 
 // --- GESTIÓN DE PERSISTENCIA Y MÉDULA ---
