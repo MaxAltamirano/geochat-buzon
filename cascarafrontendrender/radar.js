@@ -3,9 +3,12 @@
  * Arquitectura unificada: Telemetría de Red + Mutación Biométrica de Arquitecto.
  */
 
-
-// Variable de estado global para persistencia entre frames
+// --- 🧬 VARIABLES DE ESTADO GLOBAL ---
 let satelitesGlobal = [];
+let motorCorriendo = false;
+let mutacion_entropia = 1.0;
+let actividad_usuario = 0;
+let estadoUltimo = "";
 
 // --- 🎨 DEFINICIÓN DE COLORES SOBERANOS ---
 const PALETA = {
@@ -17,12 +20,8 @@ const PALETA = {
 const canvas = document.getElementById('radarCanvas');
 const ctx = canvas.getContext ? canvas.getContext('2d') : null;
 
-// --- 🧬 VARIABLES DE ESTADO ---
-let mutacion_entropia = 1.0;
-let actividad_usuario = 0;
-
 // --- 🖱️ TRANSDUCTOR BIOLÓGICO ---
-window.addEventListener('mousemove', (e) => {
+window.addEventListener('mousemove', () => {
     actividad_usuario = Math.min(actividad_usuario + 0.1, 2.0);
 });
 
@@ -44,14 +43,14 @@ async function conectarSNC() {
         if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
 
         const data = await res.json();
-        const modoDisplay = document.querySelector('#radar-container h1');
+        const modoDisplay = document.querySelector('#radar-container h1') || document.querySelector('h1');
 
-        if (data && data.status === "ONLINE") {
+        if (data && (data.status === "SYNCING" || data.status === "ONLINE")) {
             if (modoDisplay) {
                 modoDisplay.innerText = "🔱 SNC: ONLINE-SINTÉRGICO";
                 modoDisplay.style.color = "#d4af37";
             }
-            // Actualización de datos entrantes (satélites/vuelos)
+            // Actualización de datos entrantes (satélites/vuelos/lattice)
             window.updateRadarData(data);
         }
     } catch (err) {
@@ -62,88 +61,53 @@ async function conectarSNC() {
 }
 
 /**
- * 📡 MOTOR DE RENDERIZADO [SNC] - FUSIÓN FINAL
+ * 📡 ACTUALIZADOR DE TELEMETRÍA Y VISOR LATERAL
  */
-
-// 1. Eliminamos el fetch interno y dejamos que monitorPulse inyecte los datos
 window.updateRadarData = (data) => {
-    // Recibimos los datos desde el monitor externo (index.html)
     satelitesGlobal = data.Satelites || data.satelites || [];
-    
-    // Actualizamos visor lateral
     actualizarVisorLateral(satelitesGlobal);
 };
 
-// 2. Función dibujar: Pura cinemática y renderizado (sin Fecth)
-async function dibujar() {
-    if (!ctx || canvas.width === 0) {
-        requestAnimationFrame(dibujar);
-        return;
-    }
-
-    // [MANTÉN AQUÍ TODO TU CÓDIGO DE DIBUJO DE ANILLOS, BRAZO Y NODOS]
-    // ...
-    
-    requestAnimationFrame(dibujar);
-}
-
-// 3. Inicio del motor simplificado
-window.iniciarMotorRadar = () => {
-    if (motorCorriendo) return;
-    motorCorriendo = true;
-    console.log("🚀 [SNC]: Motor de radar activado (Modo Pasivo).");
-    dibujar();
-};
-
-
-const renderVisorLateral = (items) => {
+function actualizarVisorLateral(items) {
     const visor = document.getElementById('visor-telemetria');
     if (!visor) return;
 
-    visor.innerHTML = items.length > 0 ?
+    const nuevoHTML = items.length > 0 ?
         items.map(s => {
             let color = PALETA.AEREO;
-            if (s.name.includes("LLAVERO")) color = PALETA.LLAVERO;
-            if (s.name.includes("MOVIL")) color = PALETA.MOVIL;
+            if (s.name && s.name.includes("LLAVERO")) color = PALETA.LLAVERO;
+            if (s.name && s.name.includes("MOVIL")) color = PALETA.MOVIL;
 
             return `
-            <div class="log-entry" style="border-bottom: 1px solid #111; margin-bottom: 8px; padding: 5px; text-align: left; border-left: 3px solid ${color};">
+            <div class="log-entry" style="border-bottom: 1px solid #003300; margin-bottom: 8px; padding: 5px; text-align: left; border-left: 3px solid ${color};">
                 <span style="color: ${color}; font-weight: bold;">> ${s.name || 'OBJETO'}</span><br>
                 <small style="color: #888;">AZ: ${parseFloat(s.azimuth || 0).toFixed(0)}° | ALT: ${parseFloat(s.altitud || 0).toFixed(0)}km</small>
             </div>`;
         }).join('') :
         `<div class="log-entry">[ ESCANEANDO LATTICE... ]</div>`;
-};
 
-// --- 🎨 MOTOR DE RENDERIZADO ---
-
-function iniciarMotorRadar() {
-    console.log("🔱 [SNC]: Motor unificado activo. Sintonizando 432Hz...");
-    conectarSNC();
-    dibujar();
+    if (nuevoHTML !== estadoUltimo) {
+        visor.innerHTML = nuevoHTML;
+        estadoUltimo = nuevoHTML;
+    }
 }
 
-
 /**
- * 📡 MOTOR DE RENDERIZADO [SNC] - VERSIÓN FINAL
- * Responsabilidad: Visualización fluida de la Lattice GeoChat.
- * Optimización: Bucle de renderizado independiente de la red.
+ * 🎨 MOTOR DE RENDERIZADO [SNC] - FUSIÓN FINAL
  */
 async function dibujar() {
-    // 0. Protección de contexto y validación de Lattices
-    if (!ctx || canvas.width === 0) {
+    if (!ctx || !canvas || canvas.width === 0) {
         requestAnimationFrame(dibujar);
         return;
     }
 
     // 1. Cálculo de Entropía y Cinemática
-    // La actividad_usuario es gestionada externamente por eventos (mouse/teclado)
     actividad_usuario *= 0.95;
-    const mutacion_entropia = 1.0 + Math.min(actividad_usuario * 0.1, 0.5);
+    const entropiaActual = 1.0 + Math.min(actividad_usuario * 0.1, 0.5);
 
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
-    const radioBase = 200;
+    const radioBase = Math.min(centerX, centerY) * 0.85;
 
     // 2. Limpieza del Frame (Sincronía 432Hz)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -159,7 +123,7 @@ async function dibujar() {
 
     // 4. Renderizado del Brazo de rotación
     const tiempo = Date.now() / 1000;
-    const anguloBrazo = tiempo * mutacion_entropia;
+    const anguloBrazo = tiempo * entropiaActual;
     ctx.strokeStyle = 'rgba(212, 175, 55, 0.8)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -167,11 +131,11 @@ async function dibujar() {
     ctx.lineTo(centerX + Math.cos(anguloBrazo) * radioBase, centerY + Math.sin(anguloBrazo) * radioBase);
     ctx.stroke();
 
-    // 5. Renderizado dinámico de la Lattice (Usando estado global cacheado por conectarSNC)
+    // 5. Renderizado dinámico de la Lattice
     satelitesGlobal.forEach((s) => {
         let color = PALETA.AEREO; 
-        if (s.name.includes("LLAVERO")) color = PALETA.LLAVERO;
-        if (s.name.includes("MOVIL")) color = PALETA.MOVIL;
+        if (s.name && s.name.includes("LLAVERO")) color = PALETA.LLAVERO;
+        if (s.name && s.name.includes("MOVIL")) color = PALETA.MOVIL;
 
         const az = parseFloat(s.azimuth || 0);
         const rad = (az - 90) * (Math.PI / 180);
@@ -182,7 +146,7 @@ async function dibujar() {
         // Nodos
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
         ctx.fill();
 
         // Etiquetas
@@ -190,54 +154,18 @@ async function dibujar() {
         ctx.font = '10px Courier New';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(s.name || 'NODO', x + 8, y + 3);
+        ctx.fillText(s.name || 'NODO', x + 6, y);
     });
 
     // 6. Ciclo infinito de alta frecuencia
     requestAnimationFrame(dibujar);
 }
 
-
-
-
-// Llamar a esta función cuando los datos de satélites cambien
-// --- 📋 ACTUALIZADOR DE TELEMETRÍA ---
-// Variable global para persistencia de estado (debe ir fuera de la función)
-let estadoUltimo = "";
-
-function actualizarVisorLateral(items) {
-    const visor = document.getElementById('visor-telemetria');
-    if (!visor) return;
-
-    // Generamos el nuevo HTML basado en los datos actuales
-    const nuevoHTML = items.length > 0 ?
-        items.map(s => `
-            <div class="log-entry" style="border-bottom: 1px solid #003300; margin-bottom: 8px; padding: 5px; text-align: left;">
-                <span style="color: #00ff41; font-weight: bold;">> ${s.name || 'OBJETO'}</span><br>
-                <small style="color: #888;">AZ: ${parseFloat(s.azimuth || 0).toFixed(0)}° | H: ${s.horario || 'N/A'}</small>
-            </div>`).join('') :
-        `<div class="log-entry">[ ESCANEANDO LATTICE... ]</div>`;
-
-    // Comparación de estado para evitar refresco innecesario del DOM
-    if (nuevoHTML !== estadoUltimo) {
-        visor.innerHTML = nuevoHTML;
-        estadoUltimo = nuevoHTML;
-    }
-}
-
-// Ejemplo de uso: actualiza el panel cada 2 segundos para no sobrecargar
-setInterval(() => {
-    actualizarVisorLateral(satelitesGlobal);
-}, 2000);
-
-// ÚNICO punto de entrada expuesto a la ventana (Global)
-let motorCorriendo = false;
-
-// 3. Inicio del motor simplificado
+// --- 🚀 PUNTO DE ENTRADA ÚNICO ---
 window.iniciarMotorRadar = () => {
     if (motorCorriendo) return;
     motorCorriendo = true;
-    console.log("🚀 [SNC]: Motor de radar activado (Modo Pasivo).");
+    console.log("🚀 [SNC]: Motor de radar activado. Sintonizando 432Hz...");
+    conectarSNC();
     dibujar();
 };
-
