@@ -18,7 +18,6 @@ const canvas = document.getElementById('radarCanvas');
 const ctx = canvas.getContext ? canvas.getContext('2d') : null;
 
 // --- 🧬 VARIABLES DE ESTADO ---
-let satelitesGlobal = [];
 let mutacion_entropia = 1.0;
 let actividad_usuario = 0;
 

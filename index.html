@@ -234,13 +234,14 @@
 
                 if (!res.ok) throw new Error("Servidor offline");
 
+                // 👇 AQUÍ ESTABA EL ERROR: Convertimos la respuesta a JSON y la guardamos en 'data'
+                const data = await res.json();
+
                 const ahora = Math.floor(Date.now() / 1000);
                 const timestampNodo = data.timestamp || ahora;
                 const esFresco = (ahora - timestampNodo) < 60;
 
-
                 // Lógica de transición: Si los datos existen y son frescos, el motor es operativo
-                // Dentro de monitorPulse, cuando el fetch tiene éxito:
                 if (data && esFresco && (data.status === "ONLINE" || data.status === "SYNCING")) {
                     console.log("🔱 [SNC]: Pulso operativo detectado (Estado:", data.status, ")");
 
