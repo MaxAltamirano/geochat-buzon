@@ -163,7 +163,7 @@ func RegistrarRutaEstadoGlobal(mux *http.ServeMux, corsMiddleware func(http.Hand
 			estadoMemoria.Status = "SYNCING"
 		}
 		
-		// Actualizamos el timestamp usando acceso directo por punto (.)
+		// Actualizamos el timestamp del frame enviado
 		estadoMemoria.Timestamp = time.Now().Unix()
 
 		w.Header().Set("Content-Type", "application/json")
@@ -175,7 +175,6 @@ func RegistrarRutaEstadoGlobal(mux *http.ServeMux, corsMiddleware func(http.Hand
 		}
 	}))
 }
-
 
 func ActualizarEstadoDesdeBuzon(nuevoStatus string, carga float64) {
 	mu.Lock()
@@ -210,8 +209,13 @@ func main() {
 		log.Println("📁 [SISTEMA]: Carpeta ./storage lista y asegurada.")
 	}
 
+	
 	// 2. Definición del Mux Unificado
 	mux := http.NewServeMux()
+
+
+	// D. Endpoint de Estado Global (Utilizando la función modular y limpia)
+	RegistrarRutaEstadoGlobal(mux, corsMiddleware)
 
 	// --- REGISTRO DE RUTAS ---
 
@@ -233,24 +237,7 @@ func main() {
 		w.Write([]byte("Córtex Buzón Online - Operativo"))
 	})
 
-	// D. Endpoint de Estado Global (Con expiración de 30 segundos integrada y tipado correcto)
-	mux.HandleFunc("/api/estado-global", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-
-		// Si pasaron más de 30 segundos desde el último latido, forzamos OFFLINE automáticamente
-		if time.Since(ultimoPulso) > 30*time.Second {
-			estadoMemoria.Status = "OFFLINE"
-		} else {
-			estadoMemoria.Status = "SYNCING"
-		}
-
-		// Actualizamos el timestamp del frame enviado
-		estadoMemoria.Timestamp = time.Now().Unix()
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(estadoMemoria)
-	}))
+	
 
 	// E. Rutas de la Médula y Operaciones del Sistema
 	mux.HandleFunc("/api/purga", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -510,12 +497,15 @@ func actualizarEstadoTelemetria(datos Telemetria) {
 	// Sincronizar también con el estado global que consume el endpoint /api/estado-global
 	mu.Lock()
 	defer mu.Unlock()
+
+	// Actualización correcta usando campos de estructura y forzando el estado activo
+	ultimoPulso = time.Now()
+	estadoMemoria.Status = "SYNCING"
+	estadoMemoria.Load = datos.Load
+	estadoMemoria.Timestamp = ultimoPulso.Unix()
 	
-	// Actualización de campos mediante estructura tipada
-	estadoMemoria.InputActivity = datos.InputActivity
-	// Nota: Si `Satelites` o similar forma parte de la estructura EstadoGlobalSNC, 
-	// asignalo directamente aquí de la misma manera:
-	// estadoMemoria.Satelites = datos.Satelites
+	// Si tu estructura EstadoGlobalSNC usa Llaveros_SIM o similar, asignalo acorde a los campos disponibles:
+	// estadoMemoria.Llaveros_SIM = datos.Llaveros_SIM
 }
 
 // --- GESTIÓN DE PERSISTENCIA Y MÉDULA ---
