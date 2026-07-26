@@ -32,6 +32,9 @@ window.addEventListener('keydown', () => {
 /**
  * 📡 CONEXIÓN SINTERGIAL CON EL BÚZON / ENDPOINT GLOBAL
  */
+/**
+ * 📡 CONEXIÓN SINTERGIAL CON EL BÚZON / ENDPOINT GLOBAL
+ */
 async function conectarSNC() {
     try {
         const res = await fetch("https://geochat-buzon.onrender.com/api/estado-global", {
@@ -44,13 +47,16 @@ async function conectarSNC() {
         const data = await res.json();
         const modoDisplay = document.querySelector('#radar-container h1') || document.querySelector('h1');
 
-        if (data && (data.status === "SYNCING" || data.status === "ONLINE")) {
+        // Procesamos siempre que el estado sea activo (SYNCING, ONLINE o vacío por defecto)
+        if (data && data.status !== "OFFLINE") {
+            const estadoActual = data.status || "SYNCING";
             if (modoDisplay) {
-                modoDisplay.innerText = `🔱 SNC: NODO ${data.nodo || 'SOP'} (${data.status})`;
+                modoDisplay.innerText = `🔱 SNC: NODO ${data.nodo || 'Avellaneda'} (${estadoActual})`;
                 modoDisplay.style.color = "#d4af37";
             }
+            // Forzamos la actualización inmediata del array de llaveros sin importar variaciones de nombres
             window.updateRadarData(data);
-        } else if (data && data.status === "OFFLINE") {
+        } else {
             if (modoDisplay) {
                 modoDisplay.innerText = "⚠️ SNC: MODO OFFLINE (LATIDO PERDIDO)";
                 modoDisplay.style.color = "#ff4444";
@@ -66,9 +72,16 @@ async function conectarSNC() {
 /**
  * 📡 ACTUALIZADOR DE TELEMETRÍA DE LLAVEROS SIM
  */
+/**
+ * 📡 ACTUALIZADOR DE TELEMETRÍA DE LLAVEROS SIM
+ */
 window.updateRadarData = (data) => {
-    // Extraemos el array de Llaveros SIM del JSON soberano
+    if (!data) return;
+
+    // Sincronización exacta con la estructura emitida por Go (`Llaveros_SIM`)
     llaverosGlobal = data.Llaveros_SIM || data.llaveros || data.Satelites || [];
+
+    // Actualización del visor lateral de telemetría en el DOM
     actualizarVisorLateral(llaverosGlobal);
 };
 
