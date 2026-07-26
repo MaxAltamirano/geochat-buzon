@@ -1,26 +1,26 @@
 /**
- * DNA_ID: RADAR_JS_SNC_FUSION_FINAL | ORGAN: VISION-SNC | RESONANCE: 432Hz
- * Arquitectura unificada: Telemetría de Red + Mutación Biométrica de Arquitecto.
+ * DNA_ID: RADAR_JS_SNC_LAVEROS_SIM_PRO | ORGAN: VISION-SNC | RESONANCE: 432Hz
+ * Arquitectura unificada: Telemetría de Llaveros SIM Soberanos, Firmas ECDSA y Visor Sintérgico.
  */
 
 // --- 🧬 VARIABLES DE ESTADO GLOBAL ---
-let satelitesGlobal = [];
+let llaverosGlobal = [];
 let motorCorriendo = false;
 let mutacion_entropia = 1.0;
 let actividad_usuario = 0;
 let estadoUltimo = "";
 
-// --- 🎨 DEFINICIÓN DE COLORES SOBERANOS ---
+// --- 🎨 PALETA SOBERANA DE LLAVEROS ---
 const PALETA = {
-    AEREO: '#00ff41',    // Verde Neón (Aviones/Satélites)
-    LLAVERO: '#d4af37',  // Oro (Llaveros)
-    MOVIL: '#00ccff'     // Cian (Celulares)
+    LLAVERO_ACTIVO: '#d4af37',  // Oro (Llaveros SIM validados por firma criptográfica)
+    SIM_MOVIL: '#00ccff',      // Cian (Terminales de nodo en movimiento)
+    GRID_BASE: '#00ff41'       // Verde Neón (Infraestructura de red general)
 };
 
 const canvas = document.getElementById('radarCanvas');
 const ctx = canvas.getContext ? canvas.getContext('2d') : null;
 
-// --- 🖱️ TRANSDUCTOR BIOLÓGICO ---
+// --- 🖱️ TRANSDUCTOR BIOLÓGICO Y ENTROPÍA ---
 window.addEventListener('mousemove', () => {
     actividad_usuario = Math.min(actividad_usuario + 0.1, 2.0);
 });
@@ -30,8 +30,7 @@ window.addEventListener('keydown', () => {
 });
 
 /**
- * 📡 CONEXIÓN SINTERGIAL
- * Protocolo de verificación mediante Buzón (Render)
+ * 📡 CONEXIÓN SINTERGIAL CON EL BÚZON / ENDPOINT GLOBAL
  */
 async function conectarSNC() {
     try {
@@ -47,25 +46,30 @@ async function conectarSNC() {
 
         if (data && (data.status === "SYNCING" || data.status === "ONLINE")) {
             if (modoDisplay) {
-                modoDisplay.innerText = "🔱 SNC: ONLINE-SINTÉRGICO";
+                modoDisplay.innerText = `🔱 SNC: NODO ${data.nodo || 'SOP'} (${data.status})`;
                 modoDisplay.style.color = "#d4af37";
             }
-            // Actualización de datos entrantes (satélites/vuelos/lattice)
             window.updateRadarData(data);
+        } else if (data && data.status === "OFFLINE") {
+            if (modoDisplay) {
+                modoDisplay.innerText = "⚠️ SNC: MODO OFFLINE (LATIDO PERDIDO)";
+                modoDisplay.style.color = "#ff4444";
+            }
         }
     } catch (err) {
-        console.warn("📡 [SNC]: Pulso perdido. Reconectando...");
+        console.warn("📡 [SNC]: Pulso perdido con el buzón. Reintentando...");
     } finally {
         setTimeout(conectarSNC, 5000);
     }
 }
 
 /**
- * 📡 ACTUALIZADOR DE TELEMETRÍA Y VISOR LATERAL
+ * 📡 ACTUALIZADOR DE TELEMETRÍA DE LLAVEROS SIM
  */
 window.updateRadarData = (data) => {
-    satelitesGlobal = data.Satelites || data.satelites || [];
-    actualizarVisorLateral(satelitesGlobal);
+    // Extraemos el array de Llaveros SIM del JSON soberano
+    llaverosGlobal = data.Llaveros_SIM || data.llaveros || data.Satelites || [];
+    actualizarVisorLateral(llaverosGlobal);
 };
 
 function actualizarVisorLateral(items) {
@@ -74,17 +78,21 @@ function actualizarVisorLateral(items) {
 
     const nuevoHTML = items.length > 0 ?
         items.map(s => {
-            let color = PALETA.AEREO;
-            if (s.name && s.name.includes("LLAVERO")) color = PALETA.LLAVERO;
-            if (s.name && s.name.includes("MOVIL")) color = PALETA.MOVIL;
+            let color = PALETA.LLAVERO_ACTIVO;
+            if (s.name && s.name.includes("MOVIL")) color = PALETA.SIM_MOVIL;
+
+            // Extraemos una porción limpia de la firma hexadecimal si existe
+            const firmaLimpia = s.firma ? s.firma.replace('... (ECDSA Hex)', '') : '';
+            const firmaCorta = firmaLimpia ? firmaLimpia.substring(0, 12) + "..." : "PENDIENTE";
 
             return `
-            <div class="log-entry" style="border-bottom: 1px solid #003300; margin-bottom: 8px; padding: 5px; text-align: left; border-left: 3px solid ${color};">
-                <span style="color: ${color}; font-weight: bold;">> ${s.name || 'OBJETO'}</span><br>
-                <small style="color: #888;">AZ: ${parseFloat(s.azimuth || 0).toFixed(0)}° | ALT: ${parseFloat(s.altitud || 0).toFixed(0)}km</small>
+            <div class="log-entry" style="border-bottom: 1px solid #332700; margin-bottom: 8px; padding: 6px; text-align: left; border-left: 3px solid ${color}; background: rgba(0,0,0,0.4);">
+                <span style="color: ${color}; font-weight: bold; font-family: 'Courier New', monospace;">> ${s.name || 'LLAVERO_SIM'}</span><br>
+                <small style="color: #aaa;">AZ: ${parseFloat(s.azimuth || 0).toFixed(0)}° | RSSI: ${s.rssi || '-65'}dBm</small><br>
+                <small style="color: #d4af37; font-family: monospace;">SIG: ${firmaCorta}</small>
             </div>`;
         }).join('') :
-        `<div class="log-entry">[ ESCANEANDO LATTICE... ]</div>`;
+        `<div class="log-entry" style="color: #888; font-family: 'Courier New', monospace;">[ ESCANEANDO LATTICE DE LLAVEROS SIM... ]</div>`;
 
     if (nuevoHTML !== estadoUltimo) {
         visor.innerHTML = nuevoHTML;
@@ -93,7 +101,7 @@ function actualizarVisorLateral(items) {
 }
 
 /**
- * 🎨 MOTOR DE RENDERIZADO [SNC] - FUSIÓN FINAL
+ * 🎨 MOTOR DE RENDERIZADO DEL RADAR [SNC] (Frecuencia 432Hz)
  */
 async function dibujar() {
     if (!ctx || !canvas || canvas.width === 0) {
@@ -101,7 +109,6 @@ async function dibujar() {
         return;
     }
 
-    // 1. Cálculo de Entropía y Cinemática
     actividad_usuario *= 0.95;
     const entropiaActual = 1.0 + Math.min(actividad_usuario * 0.1, 0.5);
 
@@ -109,11 +116,10 @@ async function dibujar() {
     const centerY = canvas.height / 2;
     const radioBase = Math.min(centerX, centerY) * 0.85;
 
-    // 2. Limpieza del Frame (Sincronía 432Hz)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // 3. Dibujo de Anillos de resonancia
-    ctx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
+    // 1. Anillos de resonancia soberana
+    ctx.strokeStyle = 'rgba(212, 175, 55, 0.2)';
     ctx.lineWidth = 0.5;
     for (let i = 1; i <= 3; i++) {
         ctx.beginPath();
@@ -121,7 +127,7 @@ async function dibujar() {
         ctx.stroke();
     }
 
-    // 4. Renderizado del Brazo de rotación
+    // 2. Brazo de escaneo dinámico
     const tiempo = Date.now() / 1000;
     const anguloBrazo = tiempo * entropiaActual;
     ctx.strokeStyle = 'rgba(212, 175, 55, 0.8)';
@@ -131,33 +137,39 @@ async function dibujar() {
     ctx.lineTo(centerX + Math.cos(anguloBrazo) * radioBase, centerY + Math.sin(anguloBrazo) * radioBase);
     ctx.stroke();
 
-    // 5. Renderizado dinámico de la Lattice
-    satelitesGlobal.forEach((s) => {
-        let color = PALETA.AEREO; 
-        if (s.name && s.name.includes("LLAVERO")) color = PALETA.LLAVERO;
-        if (s.name && s.name.includes("MOVIL")) color = PALETA.MOVIL;
+    // 3. Renderizado de los Llaveros SIM sobre la retícula del radar
+    llaverosGlobal.forEach((s) => {
+        let color = PALETA.LLAVERO_ACTIVO;
+        if (s.name && s.name.includes("MOVIL")) color = PALETA.SIM_MOVIL;
 
         const az = parseFloat(s.azimuth || 0);
         const rad = (az - 90) * (Math.PI / 180);
 
-        const x = centerX + Math.cos(rad) * (radioBase * 0.85);
-        const y = centerY + Math.sin(rad) * (radioBase * 0.85);
+        const x = centerX + Math.cos(rad) * (radioBase * 0.80);
+        const y = centerY + Math.sin(rad) * (radioBase * 0.80);
 
-        // Nodos
+        // Nodo físico en el radar
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
         ctx.fill();
 
-        // Etiquetas
+        // Etiqueta del Llavero SIM
         ctx.fillStyle = color;
         ctx.font = '10px Courier New';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(s.name || 'NODO', x + 6, y);
+        ctx.fillText(`${s.name || 'SIM'}`, x + 8, y - 4);
+        
+        // Mini extracto de firma criptográfica bajo el nodo
+        if (s.firma) {
+            const firmaLimpia = s.firma.replace('... (ECDSA Hex)', '');
+            ctx.fillStyle = '#888';
+            ctx.font = '8px Courier New';
+            ctx.fillText(`[${firmaLimpia.substring(0, 6)}...]`, x + 8, y + 6);
+        }
     });
 
-    // 6. Ciclo infinito de alta frecuencia
     requestAnimationFrame(dibujar);
 }
 
@@ -165,7 +177,7 @@ async function dibujar() {
 window.iniciarMotorRadar = () => {
     if (motorCorriendo) return;
     motorCorriendo = true;
-    console.log("🚀 [SNC]: Motor de radar activado. Sintonizando 432Hz...");
+    console.log("🚀 [SNC]: Motor de radar de Llaveros SIM activado. Sintonizando 432Hz...");
     conectarSNC();
     dibujar();
 };

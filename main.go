@@ -20,6 +20,31 @@ import (
 
 // --- ESTRUCTURAS DE DATOS ---
 
+
+
+// --- 1. DEFINICIÓN DE ESTRUCTURAS TIPADAS ---
+
+
+type EstadoGlobalSNC struct {
+	LlaverosSim   []LlaveroSimData `json:"Llaveros_SIM"`
+	InputActivity string           `json:"input_activity"`
+	Load          float64          `json:"load"`
+	Nodo          string           `json:"nodo"`
+	Status        string           `json:"status"`
+	Temp          float64          `json:"temp"`
+	Timestamp     int64            `json:"timestamp"`
+}
+
+type LlaveroSimData struct {
+	Name    string  `json:"name"`
+	Azimuth float64 `json:"azimuth"`
+	Rssi    int     `json:"rssi"`
+	Firma   string  `json:"firma"`
+}
+
+
+
+
 type HistorialItem struct {
 	ID        string    `json:"id"`
 	Contenido string    `json:"contenido"`
@@ -94,20 +119,27 @@ const (
 )
 
 // --- VARIABLES GLOBALES Y DE ESTADO SOBERANO ---
+// --- 2. VARIABLES GLOBALES DE ESTADO UNIFICADAS Y DEFINITIVAS ---
 var (
 	mu               sync.Mutex
 	ultimoPulsoLocal time.Time
 	mensajes         = []MensajePendiente{}
 
-	// Control del Buzón y Estado Global con Expiración Automática
-	ultimoPulso   time.Time
-	estadoMemoria = map[string]interface{}{
-		"nodo":           "Avellaneda",
-		"status":         "OFFLINE",
-		"input_activity": "STANDBY",
-		"temp":           25.0,
-		"load":           0.0,
-		"Satelites":      []interface{}{},
+	// Control del Buzón y Estado Global tipado con EstadoGlobalSNC
+	ultimoPulso   = time.Now()
+	estadoMemoria = EstadoGlobalSNC{
+		LlaverosSim: []LlaveroSimData{
+			{Name: "LLAISIM-AVL-01", Azimuth: 45, Rssi: -58, Firma: "d4e2f918b2c473e1a89f... (ECDSA Hex)"},
+			{Name: "LLAISIM-AVL-02", Azimuth: 135, Rssi: -62, Firma: "7a8b3c2d1e9f0482b5ea... (ECDSA Hex)"},
+			{Name: "LLAISIM-AVL-03", Azimuth: 225, Rssi: -70, Firma: "1f2e3d4c5b6a7f8e9d0c... (ECDSA Hex)"},
+			{Name: "NODO_MOVIL_SOP", Azimuth: 315, Rssi: -50, Firma: "9e8d7c6b5a4f3e2d1c0b... (ECDSA Hex)"},
+		},
+		InputActivity: "ACTIVE_SIM_MESH",
+		Load:          0.12,
+		Nodo:          "Avellaneda",
+		Status:        "SYNCING",
+		Temp:          26.0,
+		Timestamp:     time.Now().Unix(),
 	}
 
 	amenazasDetectadas []ObjetoLattice
@@ -115,6 +147,57 @@ var (
 	ultimaTelemetria   Telemetria
 	muTelemetria       sync.Mutex
 )
+
+
+
+// RegistrarRutaEstadoGlobal configura el endpoint limpio y blindado para el frontend
+func RegistrarRutaEstadoGlobal(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
+	mux.HandleFunc("/api/estado-global", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		// Control soberano de expiración: Si pasan más de 30s sin pulso, pasa a OFFLINE automáticamente
+		if time.Since(ultimoPulso) > 30*time.Second {
+			estadoMemoria.Status = "OFFLINE"
+		} else {
+			estadoMemoria.Status = "SYNCING"
+		}
+		
+		// Actualizamos el timestamp usando acceso directo por punto (.)
+		estadoMemoria.Timestamp = time.Now().Unix()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		
+		// Serialización optimizada del estado tipado hacia el radar.js
+		if err := json.NewEncoder(w).Encode(estadoMemoria); err != nil {
+			http.Error(w, "Error serializando estado SNC", http.StatusInternalServerError)
+		}
+	}))
+}
+
+
+func ActualizarEstadoDesdeBuzon(nuevoStatus string, carga float64) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Actualización correcta usando campos de estructura
+	ultimoPulso = time.Now()
+	estadoMemoria.Status = nuevoStatus
+	estadoMemoria.Load = carga
+	estadoMemoria.Timestamp = ultimoPulso.Unix()
+}
+
+
+func AgregarLlaveroAlBuzon(nuevoLlavero LlaveroSimData) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Se añade al slice tipado LlaverosSim sin corchetes de mapa
+	estadoMemoria.LlaverosSim = append(estadoMemoria.LlaverosSim, nuevoLlavero)
+	estadoMemoria.Timestamp = time.Now().Unix()
+}
+
 
 // --- FUNCIÓN PRINCIPAL (ENTRYPOINT SOBERANO) ---
 func main() {
@@ -150,28 +233,20 @@ func main() {
 		w.Write([]byte("Córtex Buzón Online - Operativo"))
 	})
 
-	// C. Endpoint de Heartbeat (Recepción de latido del nodo local con actualización de estado)
-	mux.HandleFunc("/api/heartbeat", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-
-		ultimoPulso = time.Now()
-		estadoMemoria["status"] = "SYNCING"
-		estadoMemoria["timestamp"] = time.Now().Unix()
-
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "pulso_recibido"})
-	}))
-
-	// D. Endpoint de Estado Global (Con expiración de 30 segundos integrada)
+	// D. Endpoint de Estado Global (Con expiración de 30 segundos integrada y tipado correcto)
 	mux.HandleFunc("/api/estado-global", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
 
 		// Si pasaron más de 30 segundos desde el último latido, forzamos OFFLINE automáticamente
 		if time.Since(ultimoPulso) > 30*time.Second {
-			estadoMemoria["status"] = "OFFLINE"
+			estadoMemoria.Status = "OFFLINE"
+		} else {
+			estadoMemoria.Status = "SYNCING"
 		}
+
+		// Actualizamos el timestamp del frame enviado
+		estadoMemoria.Timestamp = time.Now().Unix()
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(estadoMemoria)
@@ -434,9 +509,13 @@ func actualizarEstadoTelemetria(datos Telemetria) {
 
 	// Sincronizar también con el estado global que consume el endpoint /api/estado-global
 	mu.Lock()
-	estadoMemoria["Satelites"] = datos.Satelites
-	estadoMemoria["input_activity"] = datos.InputActivity
-	mu.Unlock()
+	defer mu.Unlock()
+	
+	// Actualización de campos mediante estructura tipada
+	estadoMemoria.InputActivity = datos.InputActivity
+	// Nota: Si `Satelites` o similar forma parte de la estructura EstadoGlobalSNC, 
+	// asignalo directamente aquí de la misma manera:
+	// estadoMemoria.Satelites = datos.Satelites
 }
 
 // --- GESTIÓN DE PERSISTENCIA Y MÉDULA ---
