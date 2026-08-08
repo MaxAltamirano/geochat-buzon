@@ -213,12 +213,35 @@ func main() {
 	// 2. Definición del Mux Unificado
 	mux := http.NewServeMux()
 
-
 	// D. Endpoint de Estado Global (Utilizando la función modular y limpia)
 	RegistrarRutaEstadoGlobal(mux, corsMiddleware)
 
 	// --- REGISTRO DE RUTAS ---
 
+
+	// Endpoint para que AdminIdeas.vue lea las ideas fiscalizadas y el estado del Córtex
+	mux.HandleFunc("/api/ideas/fiscalizadas", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		rutaIdeas := "./storage/ideas_fiscalizadas.json"
+		if _, err := os.Stat(rutaIdeas); os.IsNotExist(err) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`[]`))
+			return
+		}
+
+		datos, err := os.ReadFile(rutaIdeas)
+		if err != nil {
+			http.Error(w, "Error leyendo buzón de ideas", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(datos)
+	}))
+	
 	// A. Ruta de descarga prioritaria de binarios
 	mux.HandleFunc("/descargar-binario", func(w http.ResponseWriter, r *http.Request) {
 		userAgent := r.Header.Get("User-Agent")
