@@ -111,12 +111,24 @@ type OllamaResponse struct {
 	Response string `json:"response"`
 }
 
+type RegistroAuditoria struct {
+	ID        int                    `json:"id"`
+	Nodo      string                 `json:"nodo"`
+	Timestamp time.Time              `json:"timestamp"`
+	Payload   map[string]interface{} `json:"payload"`
+	HashADN   string                 `json:"hash_adn"`
+}
+
 // --- CONSTANTES DE PERSISTENCIA ---
 const (
 	archivoPersistencia   = "medula_local.json"
 	archivoHash           = "adn_hash.txt"
 	archivoRespuestasKimi = "./storage/respuestas_kimi.json"
 )
+const (
+	archivoAuditoria = "./storage/auditoria_tecnica.json"
+)
+
 
 // --- VARIABLES GLOBALES Y DE ESTADO SOBERANO ---
 // --- 2. VARIABLES GLOBALES DE ESTADO UNIFICADAS Y DEFINITIVAS ---
@@ -305,6 +317,11 @@ func main() {
 		w.Write([]byte("Evento guardado"))
 	}))
 
+    mux.HandleFunc("/api/auditoria/ingestar", corsMiddleware(ingestarAuditoriaTecnica))
+
+	//------------------------------------------------------------
+
+	
 	// --- 3. SERVICIOS EN BACKGROUND ---
 	go escucharSocketBuzon()
 
@@ -349,6 +366,79 @@ func main() {
 
 	log.Fatal(server.ListenAndServe())
 }
+
+
+//------ auditoria de archivos 
+
+
+func cargarAuditoriaDeDisco() []RegistroAuditoria {
+	if _, err := os.Stat(archivoAuditoria); os.IsNotExist(err) {
+		return []RegistroAuditoria{}
+	}
+	datos, err := ioutil.ReadFile(archivoAuditoria)
+	if err != nil {
+		return []RegistroAuditoria{}
+	}
+	var registros []RegistroAuditoria
+	json.Unmarshal(datos, &registros)
+	return registros
+}
+
+func guardarAuditoriaEnDisco(registros []RegistroAuditoria) {
+	datos, err := json.MarshalIndent(registros, "", "  ")
+	if err != nil {
+		log.Printf("❌ [AUDITORÍA]: Error al marshalear registros: %v", err)
+		return
+	}
+
+	tmpFile := archivoAuditoria + ".tmp"
+	err = ioutil.WriteFile(tmpFile, datos, 0644)
+	if err != nil {
+		log.Printf("❌ [AUDITORÍA]: Error escribiendo archivo temporal: %v", err)
+		return
+	}
+
+	err = os.Rename(tmpFile, archivoAuditoria)
+	if err != nil {
+		log.Printf("❌ [AUDITORÍA]: Error al realizar el rename atómico: %v", err)
+		os.Remove(tmpFile)
+		return
+	}
+
+	log.Println("💾 [AUDITORÍA]: Registro técnico persistido de forma atómica.")
+}
+
+
+func ingestarAuditoriaTecnica(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var reg RegistroAuditoria
+	if err := json.NewDecoder(r.Body).Decode(&reg); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		log.Printf("❌ [AUDITORÍA]: Error decodificando payload técnico: %v", err)
+		return
+	}
+
+	mu.Lock()
+	registros := cargarAuditoriaDeDisco()
+
+	reg.ID = len(registros) + 1
+	reg.Timestamp = time.Now()
+
+	registros = append(registros, reg)
+	guardarAuditoriaEnDisco(registros)
+	mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte(fmt.Sprintf(`{"status":"auditoria_registrada", "id":%d}`, reg.ID)))
+}
+
+//----------------------------------------------------------------
+
 
 // --- FUNCIONES DE SOPORTE Y CONTROL DE ESTADO ---
 
