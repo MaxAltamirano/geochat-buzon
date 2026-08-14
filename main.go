@@ -16,14 +16,23 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"context"       
+    "database/sql"
+	_ "github.com/lib/pq"
 )
 
-// --- ESTRUCTURAS DE DATOS ---
-
-
+var db *sql.DB
 
 // --- 1. DEFINICIÓN DE ESTRUCTURAS TIPADAS ---
 
+// Estructura para recibir el bloque masivo
+type payloadIngesta struct {
+	IDADN      string                 `json:"id_adn"`
+	QRData     string                 `json:"qr_data"`
+	HashEstado string                 `json:"hash_estado"`
+	NivelBSP   int                    `json:"nivel_bsp"`
+	Metadatos  map[string]interface{} `json:"metadatos"`
+}
 
 type EstadoGlobalSNC struct {
 	LlaverosSim   []LlaveroSimData `json:"Llaveros_SIM"`
@@ -160,7 +169,64 @@ var (
 	muTelemetria       sync.Mutex
 )
 
+// Handler para ingestar el bloque directamente en PostgreSQL (transcriptomas)
+func ingestarTranscriptomaBSP(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 
+		var payload payloadIngesta
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "payload_invalido"})
+			return
+		}
+
+		// Convertir metadatos a JSONB string o []byte compatible con Postgres
+		metaJSON, err := json.Marshal(payload.Metadatos)
+		if err != nil {
+			metaJSON = []byte("{}")
+		}
+
+		query := `
+			INSERT INTO transcriptomas (id_adn, qr_data, hash_estado, nivel_bsp, metadatos, captura_viva)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id;
+		`
+
+		var nuevoID int
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		err = db.QueryRowContext(ctx, query,
+			payload.IDADN,
+			payload.QRData,
+			payload.HashEstado,
+			payload.NivelBSP,
+			metaJSON,
+			time.Now(),
+		).Scan(&nuevoID)
+
+		if err != nil {
+			log.Printf("❌ [DB-ERROR]: No se pudo insertar el transcriptoma BSP: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "error_base_datos"})
+			return
+		}
+
+		log.Printf("🧬 [TRANSCRIPTOMA-BSP]: Bloque insertado con éxito en PostgreSQL. ID Asignado: #%d (Nivel BSP: %d)", nuevoID, payload.NivelBSP)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":    "transcriptoma_bsp_guardado",
+			"id":        nuevoID,
+			"nivel_bsp": payload.NivelBSP,
+		})
+	}
+}
 
 // RegistrarRutaEstadoGlobal configura el endpoint limpio y blindado para el frontend
 func RegistrarRutaEstadoGlobal(mux *http.ServeMux, corsMiddleware func(http.HandlerFunc) http.HandlerFunc) {
@@ -212,6 +278,18 @@ func AgregarLlaveroAlBuzon(nuevoLlavero LlaveroSimData) {
 
 // --- FUNCIÓN PRINCIPAL (ENTRYPOINT SOBERANO) ---
 func main() {
+
+	// 1. Definir la cadena de conexión (ajusta tus credenciales)
+    connStr := "host=localhost port=5432 user=postgres dbname=geochat sslmode=disable"
+    
+    // 2. Inicializar la variable db (Global o pasada localmente)
+    var err error
+    db, err = sql.Open("postgres", connStr) // Asegúrate de tener el driver importado
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
 	log.Println("📁 [SISTEMA]: Iniciando arranque soberano del Córtex Buzón...")
 
 	// 1. Asegurar la infraestructura local de almacenamiento
@@ -230,6 +308,8 @@ func main() {
 
 	// --- REGISTRO DE RUTAS ---
 
+	// Suponiendo que tu conexión a postgres se llama 'db'
+	mux.HandleFunc("/api/ingestar-transcriptoma", corsMiddleware(ingestarTranscriptomaBSP(db)))
 
 	// Endpoint para que AdminIdeas.vue lea las ideas fiscalizadas y el estado del Córtex
 	mux.HandleFunc("/api/ideas/fiscalizadas", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {

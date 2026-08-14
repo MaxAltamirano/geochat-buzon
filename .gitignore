@@ -4,10 +4,14 @@ dist/
 package-lock.json
 package.json
 
-# --- Binarios y logs ---
+# --- Binarios y logs (Ejecutables de Go y compilaciones) ---
 geochat-movil
 main
 buzon_server
+geochat-buzon
+*.exe
+*.o
+*.out
 *.log
 *.bak
 descarga_debug.txt
@@ -31,16 +35,8 @@ descarga_debug.txt
 
 # --- Desbloqueo de Fuentes Críticas ---
 !main.go
+!bsp.go
 !go.mod
 !go.sum
 !render.yaml
 !Dockerfile
-
-# --- Binarios y logs ---
-geochat-movil
-main
-buzon_server
-geochat-buzon
-*.log
-*.bak
-descarga_debug.txt
