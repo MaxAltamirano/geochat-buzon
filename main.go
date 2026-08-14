@@ -19,11 +19,42 @@ import (
 	"context"       
     "database/sql"
 	_ "github.com/lib/pq"
+	"strings"
 )
 
 var db *sql.DB
 
 // --- 1. DEFINICIÓN DE ESTRUCTURAS TIPADAS ---
+
+// --- ESTRUCTURAS Y FUNCIONES DE SOPORTE PARA EL BUZÓN EN RENDER ---
+
+type DocumentacionAnalisis struct {
+	IDIdea               string    `json:"id_idea"`
+	FilePath             string    `json:"file_path"`
+	NombreArchivo        string    `json:"nombre_archivo"`
+	Estado               string    `json:"estado"`
+	ContenidoOriginal    string    `json:"contenido_original"`
+	ContenidoAuditado    string    `json:"contenido_auditado"`
+	ResumenCambios       string    `json:"resumen_cambios"`
+	Timestamp            time.Time `json:"timestamp"`
+	TieneRecomendaciones bool      `json:"tiene_recomendaciones"`
+}
+
+type LoteAuditoriaMasiva struct {
+	Nodo      string                  `json:"nodo"`
+	Timestamp time.Time               `json:"timestamp"`
+	Bloque    []DocumentacionAnalisis `json:"bloque"`
+}
+
+type TareaAuditoriaBuzon struct {
+	ID                 string    `json:"id"`
+	FilePath           string    `json:"file_path"`
+	Contenido          string    `json:"contenido"`
+	TimestampInyeccion time.Time `json:"timestamp_inyeccion"`
+	TimestampRespuesta time.Time `json:"timestamp_respuesta"`
+	TamanioBytes       int64     `json:"tamanio_bytes"`
+}
+
 
 // Estructura para recibir el bloque masivo
 type payloadIngesta struct {
@@ -127,6 +158,12 @@ type RegistroAuditoria struct {
 	Payload   map[string]interface{} `json:"payload"`
 	HashADN   string                 `json:"hash_adn"`
 }
+
+// Estructura para el bloque grande que entra a Render
+type BloqueMasivoEntrada struct {
+	LoteDocumentos []DocumentacionAnalisis `json:"lote_documentos"`
+}
+
 
 // --- CONSTANTES DE PERSISTENCIA ---
 const (
@@ -275,6 +312,52 @@ func AgregarLlaveroAlBuzon(nuevoLlavero LlaveroSimData) {
 	estadoMemoria.Timestamp = time.Now().Unix()
 }
 
+// Handler que atiende el GET desde Render en tu Linux local
+func HandlerEntregarPendientes(w http.ResponseWriter, r *http.Request) {
+	// 1. Validar que la petición sea estrictamente GET (seguridad soberana)
+	if r.Method != http.MethodGet {
+		http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 2. Consultar tu PostgreSQL local para traer todos los ítems con estado "PENDIENTE"
+	rows, err := db.Query("SELECT id_idea, file_path, nombre_archivo, contenido_original FROM auditorias WHERE estado = 'PENDIENTE' ORDER BY fecha_creacion ASC")
+	if err != nil {
+		fmt.Printf("[LINUX LOCAL] Error al consultar la DB local: %v\n", err)
+		http.Error(w, "Error interno de base de datos", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var pendientes []DocumentacionAnalisis
+
+	// 3. Recorrer los resultados y armar el slice de pendientes
+	for rows.Next() {
+		var doc DocumentacionAnalisis
+		if err := rows.Scan(&doc.IDIdea, &doc.FilePath, &doc.NombreArchivo, &doc.ContenidoOriginal); err != nil {
+			fmt.Printf("[LINUX LOCAL] Error al escanear fila: %v\n", err)
+			continue
+		}
+		pendientes = append(pendientes, doc)
+	}
+
+	// Si no hay pendientes, devolvemos un array vacío JSON en lugar de null
+	if pendientes == nil {
+		pendientes = []DocumentacionAnalisis{}
+	}
+
+	// 4. Configurar cabecera y responderle a Render con el JSON exacto
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	
+	if err := json.NewEncoder(w).Encode(pendientes); err != nil {
+		fmt.Printf("[LINUX LOCAL] Error al codificar JSON para Render: %v\n", err)
+		return
+	}
+
+	fmt.Printf("[LINUX LOCAL] Sincronización exitosa: Se entregaron %d ítems pendientes a Render.\n", len(pendientes))
+}
+
 
 // --- FUNCIÓN PRINCIPAL (ENTRYPOINT SOBERANO) ---
 func main() {
@@ -307,6 +390,27 @@ func main() {
 	RegistrarRutaEstadoGlobal(mux, corsMiddleware)
 
 	// --- REGISTRO DE RUTAS ---
+
+	// --- RUTAS DE AUDITORÍA Y BUZÓN SOBERANO ---
+	
+	// Registrar la ruta exacta que consultará Render
+    http.HandleFunc("/api/sincronizar/pendientes", HandlerEntregarPendientes)
+
+	
+	// 2. Endpoint donde el worker local consulta los resultados ya procesados por Ollama
+	mux.HandleFunc("/api/auditoria/resultados-listos", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"status": "sin_resultados_pendientes",
+		})
+	}))
+	
 
 	// Suponiendo que tu conexión a postgres se llama 'db'
 	mux.HandleFunc("/api/ingestar-transcriptoma", corsMiddleware(ingestarTranscriptomaBSP(db)))
@@ -445,6 +549,266 @@ func main() {
 	}
 
 	log.Fatal(server.ListenAndServe())
+}
+
+
+
+// Funciones simuladas o adaptadas a tu capa de base de datos en Render
+func GuardarEnDbRender(doc DocumentacionAnalisis, estado string) {
+	// Aquí conectas con tu postgres local de Render para guardar el ítem en cola
+}
+
+func ObtenerSiguientePendienteEnDbRender() *DocumentacionAnalisis {
+	// Retorna el siguiente documento pendiente desde la DB de Render
+	return nil
+}
+
+func ActualizarEstadoDbRender(id string, estado string) {
+	// Actualiza el estado en la DB (PENDIENTE, EN_PROCESO, COMPLETADO, ERROR)
+}
+
+
+
+
+func ObtenerSiguienteSalidaBuzonRender() *TareaAuditoriaBuzon {
+	// Retira el siguiente resultado listo para el GET del worker
+	return nil
+}
+
+//--------------------------------------------------------------------
+
+
+func ManejarIngestaLote(w http.ResponseWriter, r *http.Request) {
+	var lote LoteAuditoriaMasiva
+	if err := json.NewDecoder(r.Body).Decode(&lote); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// 1. Guardar cada archivo del bloque en PostgreSQL (Render) con estado "PENDIENTE"
+	for _, doc := range lote.Bloque {
+		GuardarEnDbRender(doc, "PENDIENTE")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "lote_recibido_en_cola"})
+}
+
+// Cola volátil en memoria de Render (sin base de datos en la nube)
+var ColaMemoriaRender []DocumentacionAnalisis
+
+// Buzón de salida temporal en Render para que el Worker de la Linux local lo retire
+var BuzonSalidaRender []TareaAuditoriaBuzon
+
+
+func GuardarEnSalidaBuzonRender(tarea TareaAuditoriaBuzon) {
+	BuzonSalidaRender = append(BuzonSalidaRender, tarea)
+}
+
+func SolicitarPendientesALinuxLocal() []DocumentacionAnalisis {
+	linuxLocalURL := os.Getenv("LINUX_LOCAL_URL")
+	if linuxLocalURL == "" {
+		fmt.Println("[RENDER] ERROR: LINUX_LOCAL_URL no está configurada.")
+		return nil
+	}
+
+	fmt.Println("[RENDER] Consultando pendientes a la Linux local...")
+
+	resp, err := http.Get(linuxLocalURL + "/api/sincronizar/pendientes")
+	if err != nil {
+		fmt.Printf("[RENDER] Error al conectar con la Linux local: %v\n", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	var pendientes []DocumentacionAnalisis
+	err = json.NewDecoder(resp.Body).Decode(&pendientes)
+	if err != nil {
+		fmt.Printf("[RENDER] Error al decodificar la lista de pendientes: %v\n", err)
+		return nil
+	}
+
+	return pendientes
+}
+
+//---------------------------------------------------------
+
+
+func EnviarAOllamaNube(nombreArchivo string, contenido string) (string, error) {
+	ordenAuditoria := "Eres el Auditor Soberano del Espacio GeoChat. Tu tarea es analizar el código fuente recibido, verificar la resiliencia, detectar fallos de seguridad o arquitectura, y devolver un resumen estructurado de auditoría con sugerencias de mejora."
+
+	if strings.HasSuffix(nombreArchivo, ".go") {
+		ordenAuditoria += " Enfócate en concurrencia segura, manejo de errores y rendimiento en Go."
+	} else if strings.HasSuffix(nombreArchivo, ".vue") || strings.HasSuffix(nombreArchivo, ".ts") {
+		ordenAuditoria += " Enfócate en la reactividad, tipado y consistencia de componentes en el frontend."
+	}
+
+	promptCompleto := fmt.Sprintf("%s\n\n--- CÓDIGO A AUDITAR (%s) ---\n%s", ordenAuditoria, nombreArchivo, contenido)
+
+	payload := map[string]interface{}{
+		"model":  "llama3",
+		"prompt": promptCompleto,
+		"stream": false,
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	ollamaURL := os.Getenv("OLLAMA_HOST")
+	if ollamaURL == "" {
+		ollamaURL = "http://localhost:11434"
+	}
+
+	resp, err := http.Post(ollamaURL+"/api/generate", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "Auditoría simulada por fallback (Sin conexión a Ollama)", nil
+	}
+	defer resp.Body.Close()
+
+	var resultadoOllama struct {
+		Response string `json:"response"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&resultadoOllama); err != nil {
+		return "Error al decodificar respuesta de Ollama", err
+	}
+
+	return resultadoOllama.Response, nil
+}
+
+
+//--------------------------------------------------------------------
+
+func IniciarMotorColaOllama() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// 1. Si la memoria volátil de Render está vacía, pedimos la lista fresca a la Linux local
+		if len(ColaMemoriaRender) == 0 {
+			ColaMemoriaRender = SolicitarPendientesALinuxLocal()
+			
+			// Si la Linux local responde que no hay nada pendiente, esperamos al próximo tick
+			if len(ColaMemoriaRender) == 0 {
+				continue 
+			}
+		}
+
+		// 2. Extraer el primer elemento de la cola en memoria de forma segura
+		docPendiente := ColaMemoriaRender[0]
+		ColaMemoriaRender = ColaMemoriaRender[1:] // Desplaza la cola activa
+
+		// 3. Registrar timestamp exacto de inyección
+		timestampInyeccion := time.Now()
+
+		// 4. Mandar a Ollama con la orden explícita y el archivo correspondiente
+		resultadoOllama, err := EnviarAOllamaNube(docPendiente.NombreArchivo, docPendiente.ContenidoOriginal)
+		timestampRespuesta := time.Now()
+
+		if err != nil {
+			continue
+		}
+
+		// 5. Empaquetar datos clave para el buzón de salida
+		resultadoFinal := TareaAuditoriaBuzon{
+			ID:                 docPendiente.IDIdea,
+			FilePath:           docPendiente.FilePath,
+			Contenido:          resultadoOllama,
+			TimestampInyeccion: timestampInyeccion,
+			TimestampRespuesta: timestampRespuesta,
+			TamanioBytes:       int64(len(docPendiente.ContenidoOriginal)),
+		}
+
+		// 6. Depositar el resultado listo para que el Worker local lo retire
+		GuardarEnSalidaBuzonRender(resultadoFinal)
+	}
+}
+
+// 1. Recibes, fraccionas y refactorizas en la memoria volátil de Render
+func RecibirYFraccionarBloqueGrande(bloqueMasivo BloqueMasivoEntrada) {
+    fmt.Printf("[RENDER] Recibiendo bloque masivo. Fraccionando %d documentos...\n", len(bloqueMasivo.LoteDocumentos))
+
+    // Aquí ya queda ordenado y fraccionado 1 a 1 en la cola
+    ColaMemoriaRender = bloqueMasivo.LoteDocumentos
+
+    fmt.Printf("[RENDER] Bloque fraccionado con éxito. %d elementos listos en la cola volátil.\n", len(ColaMemoriaRender))
+}
+
+// 2. En el handler o flujo principal, mandas ESA MISMA cola ya fraccionada a la Linux local:
+func HandlerRecibirBloqueRender(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+        http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+        return
+    }
+
+    var bloqueMasivo BloqueMasivoEntrada
+    if err := json.NewDecoder(r.Body).Decode(&bloqueMasivo); err != nil {
+        http.Error(w, "Error al decodificar", http.StatusBadRequest)
+        return
+    }
+
+    // Fraccionamos y cargamos la cola volátil en Render
+    RecibirYFraccionarBloqueGrande(bloqueMasivo)
+
+    // Inmediatamente mandamos A ESA MISMA COLA YA REFACTORIZADA a la Linux local para que persista
+    go func() {
+        // Armamos el paquete usando exactamente lo que está en ColaMemoriaRender
+        paqueteRefactorizado := BloqueMasivoEntrada{
+            LoteDocumentos: ColaMemoriaRender,
+        }
+
+        // Usamos la función correcta que le hace el POST a tu Linux local
+        err := EnviarLoteRefactorizadoALinuxLocal(paqueteRefactorizado)
+        if err != nil {
+            fmt.Printf("[RENDER-SYNC] Error al sincronizar el lote con la Linux local: %v\n", err)
+        }
+    }()
+
+    w.WriteHeader(http.StatusOK)
+    w.Write([]byte(`{"status":"bloque_recibido_y_sincronizando"}`))
+}
+
+func EnviarLoteRefactorizadoALinuxLocal(bloque BloqueMasivoEntrada) error {
+	linuxLocalURL := os.Getenv("LINUX_LOCAL_URL")
+	if linuxLocalURL == "" {
+		return fmt.Errorf("LINUX_LOCAL_URL no está configurada en Render")
+	}
+
+	jsonData, err := json.Marshal(bloque)
+	if err != nil {
+		return fmt.Errorf("error al serializar el paquete refactorizado: %v", err)
+	}
+
+	resp, err := http.Post(linuxLocalURL+"/api/sincronizar/guardar-lote", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("error de red al conectar con la Linux local: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("la Linux local rechazó el lote. Código: %d", resp.StatusCode)
+	}
+
+	fmt.Println("[RENDER-SYNC] Lote refactorizado enviado y persistido con éxito en la Linux local.")
+	return nil
+}
+
+func ManejarObtenerResultado(w http.ResponseWriter, r *http.Request) {
+	// Saca el primer resultado listo de la cola de salida de Render
+	resultado := ObtenerSiguienteSalidaBuzonRender()
+	if resultado == nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resultado)
 }
 
 
