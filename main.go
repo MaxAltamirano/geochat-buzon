@@ -157,6 +157,26 @@ type RegistroAuditoria struct {
 	Timestamp time.Time              `json:"timestamp"`
 	Payload   map[string]interface{} `json:"payload"`
 	HashADN   string                 `json:"hash_adn"`
+	
+}
+
+type LoteEntrante struct {
+	Nodo      string                   `json:"nodo"`
+	Timestamp time.Time                `json:"timestamp"`
+	Bloque    []DocumentoAuditoria     `json:"bloque"`
+}
+
+// Representa cada archivo individual dentro del bloque
+type DocumentoAuditoria struct {
+    NombreArchivo     string `json:"nombre_archivo"`
+    ContenidoOriginal string `json:"contenido"` // <--- Ajusta según tu struct real
+}
+
+// Esta es la estructura que envías de vuelta a Linux lista para Ollama
+type EstructuraParaOllama struct {
+    Nombre string `json:"nombre"`
+    Codigo string `json:"codigo"`
+    Prompt string `json:"prompt"`
 }
 
 // Estructura para el bloque grande que entra a Render
@@ -170,9 +190,6 @@ const (
 	archivoPersistencia   = "medula_local.json"
 	archivoHash           = "adn_hash.txt"
 	archivoRespuestasKimi = "./storage/respuestas_kimi.json"
-)
-const (
-	archivoAuditoria = "./storage/auditoria_tecnica.json"
 )
 
 
@@ -815,71 +832,48 @@ func ManejarObtenerResultado(w http.ResponseWriter, r *http.Request) {
 //------ auditoria de archivos 
 
 
-func cargarAuditoriaDeDisco() []RegistroAuditoria {
-	if _, err := os.Stat(archivoAuditoria); os.IsNotExist(err) {
-		return []RegistroAuditoria{}
-	}
-	datos, err := ioutil.ReadFile(archivoAuditoria)
-	if err != nil {
-		return []RegistroAuditoria{}
-	}
-	var registros []RegistroAuditoria
-	json.Unmarshal(datos, &registros)
-	return registros
-}
 
-func guardarAuditoriaEnDisco(registros []RegistroAuditoria) {
-	datos, err := json.MarshalIndent(registros, "", "  ")
-	if err != nil {
-		log.Printf("❌ [AUDITORÍA]: Error al marshalear registros: %v", err)
-		return
-	}
 
-	tmpFile := archivoAuditoria + ".tmp"
-	err = ioutil.WriteFile(tmpFile, datos, 0644)
-	if err != nil {
-		log.Printf("❌ [AUDITORÍA]: Error escribiendo archivo temporal: %v", err)
-		return
-	}
 
-	err = os.Rename(tmpFile, archivoAuditoria)
-	if err != nil {
-		log.Printf("❌ [AUDITORÍA]: Error al realizar el rename atómico: %v", err)
-		os.Remove(tmpFile)
-		return
-	}
-
-	log.Println("💾 [AUDITORÍA]: Registro técnico persistido de forma atómica.")
-}
 
 
 func ingestarAuditoriaTecnica(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("🔵 [BUZÓN]: Recepcion del lote grande desde la linux local")
+	
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	var reg RegistroAuditoria
-	if err := json.NewDecoder(r.Body).Decode(&reg); err != nil {
+	// 1. Usamos LoteEntrante para decodificar el JSON entrante que trae el .Bloque
+	var lote LoteEntrante
+	if err := json.NewDecoder(r.Body).Decode(&lote); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Printf("❌ [AUDITORÍA]: Error decodificando payload técnico: %v", err)
 		return
 	}
 
-	mu.Lock()
-	registros := cargarAuditoriaDeDisco()
+	// 2. Refactorización recorriendo lote.Bloque (no reg.Bloque)
+	var listaRefactorizada []EstructuraParaOllama
+	for _, item := range lote.Bloque {
+		listaRefactorizada = append(listaRefactorizada, EstructuraParaOllama{
+			Nombre: item.NombreArchivo,
+			Codigo: item.ContenidoOriginal, // Texto plano listo para procesar
+			Prompt: "Analiza este código de GeoChat buscando vulnerabilidades, resonancia 432Hz y eficiencia.",
+		})
+	}
 
-	reg.ID = len(registros) + 1
-	reg.Timestamp = time.Now()
+	// 3. Log con punto azul indicando el envío del refactorizado hacia Linux
+	fmt.Printf("🔵 [BUZÓN]: Envío del refactorizado para la linux local (Total de archivos: %d)\n", len(listaRefactorizada))
 
-	registros = append(registros, reg)
-	guardarAuditoriaEnDisco(registros)
-	mu.Unlock()
-
+	// 4. Devolución de la estructura refactorizada a la Linux local mediante la respuesta HTTP
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	w.Write([]byte(fmt.Sprintf(`{"status":"auditoria_registrada", "id":%d}`, reg.ID)))
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(listaRefactorizada); err != nil {
+		log.Printf("❌ [BUZÓN]: Error enviando el paquete refactorizado a Linux: %v", err)
+	}
 }
+
 
 //----------------------------------------------------------------
 
