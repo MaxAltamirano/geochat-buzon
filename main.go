@@ -833,10 +833,6 @@ func ManejarObtenerResultado(w http.ResponseWriter, r *http.Request) {
 
 
 
-
-
-
-
 func ingestarAuditoriaTecnica(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("🔵 [BUZÓN]: Recepcion del lote grande desde la linux local")
 	
@@ -864,7 +860,7 @@ func ingestarAuditoriaTecnica(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Log con punto azul indicando el envío del refactorizado hacia Linux
-	fmt.Printf("🔵 [BUZÓN]: Envío del refactorizado para la linux local (Total de archivos: %d)\n", len(listaRefactorizada))
+	fmt.Printf("🔵 [BUZÓN]: Envío del Refactorizado para la linux local (Total de archivos: %d)\n", len(listaRefactorizada))
 
 	// 4. Devolución de la estructura refactorizada a la Linux local mediante la respuesta HTTP
 	w.Header().Set("Content-Type", "application/json")
