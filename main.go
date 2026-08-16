@@ -178,6 +178,14 @@ type BloqueMasivoEntrada struct {
 	LoteDocumentos []DocumentacionAnalisis `json:"lote_documentos"`
 }
 
+// Definición del ADN del Nodo Soberano
+type GemeloDigital struct {
+	DID       string `json:"did"`
+	Timestamp string `json:"timestamp"`
+	ADNHash   string `json:"adn_hash"`
+	Status    string `json:"status"`
+}
+
 // --- CONSTANTES DE PERSISTENCIA ---
 const (
 	archivoPersistencia   = "medula_local.json"
@@ -398,8 +406,74 @@ func main() {
 
 	// --- RUTAS DE AUDITORÍA Y BUZÓN SOBERANO ---
 
+
+	var miFraseSecreta = "Yo.Soy.Riqueza.Incalculable.Yo.Soy.Abundancia.Total"
+
+	// Middleware de Autorización Soberana
+	autorizarSoberano := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("X-Soberano-Key") != miFraseSecreta {
+				w.WriteHeader(http.StatusForbidden)
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "mensaje": "Acceso denegado: Firma soberana inválida"})
+				return
+			}
+			next(w, r)
+		}
+	}
+
+	// 1. Endpoint de latido (Verificación de ADN)
+	mux.HandleFunc("/api/sync/heartbeat", autorizarSoberano(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		
+		// Corregido: calcularHash devuelve solo un valor (string)
+		hashRemoto := calcularHash("main.go")
+		if hashRemoto == "" {
+			hashRemoto = "ERR_HASH_REMOTO"
+		}
+
+		// Corregido: tipado explícito con la estructura GemeloDigital
+		estado := GemeloDigital{
+			DID:       "DID:GEO:NODO_SOBERANO_AVELLANEDA",
+			Timestamp: time.Now().Format(time.RFC3339),
+			ADNHash:   hashRemoto,
+			Status:    "ONLINE",
+		}
+		
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(estado)
+	}))
+
+	// 2. Endpoint de autosanación (Parcheo)
+	mux.HandleFunc("/api/sync/parchear", autorizarSoberano(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "mensaje": "Método no permitido"})
+			return
+		}
+
+		codigoNuevo, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		err = os.WriteFile("main.go", codigoNuevo, 0644)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "mensaje": "Fallo al aplicar el parche"})
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "success", "mensaje": "Soberanía restaurada"})
+		log.Println("🩺 [NUBE-LAB]: Parche aplicado bajo firma soberana.")
+	}))
+
 	// Registrar la ruta exacta que consultará Render
 	http.HandleFunc("/api/sincronizar/pendientes", HandlerEntregarPendientes)
+
+	
 
 	// 2. Endpoint donde el worker local consulta los resultados ya procesados por Ollama
 	mux.HandleFunc("/api/auditoria/resultados-listos", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
