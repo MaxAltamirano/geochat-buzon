@@ -478,40 +478,12 @@ func main() {
 	// Registrar la ruta exacta que consultará Render
 	http.HandleFunc("/api/sincronizar/pendientes", HandlerEntregarPendientes)
 
-	// 1. Endpoint POST: La Linux local manda el paquete procesado por Ollama y se guarda en la variable global
-	mux.HandleFunc("/api/auditoria/recibir-local", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "mensaje": "Método no permitido"})
-			return
-		}
-
-		cuerpo, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "mensaje": "Error leyendo el payload"})
-			return
-		}
-
-		muAuditoria.Lock()
-		ultimoPaqueteListo = cuerpo // Guarda el paquete actual (si entra el 2, reemplaza/pisa el espacio)
-		muAuditoria.Unlock()
-
-		log.Printf("📥 [CÓRTEX BUZÓN]: Paquete de auditoría recibido y retenido (%d bytes)", len(cuerpo))
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"status":  "success",
-			"mensaje": "Paquete retenido en memoria para despacho",
-		})
-	}))
 
 	// 2. Endpoint GET: El worker viene a buscar el paquete, se lo lleva, y la variable se limpia (FIFO estricto de a uno)
 	mux.HandleFunc("/api/auditoria/resultados-listos", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 
 		fmt.Println("🔵 -----------------------------------------------------------")
-		fmt.Println("🔵 [ESTAMOS DENTRO DEL WORKER]: Vigía de red encendido...")
+		fmt.Println("🔵 Buzon mandando respuesta de Ollaama")
 		fmt.Println("🔵 -----------------------------------------------------------")
 
 		if r.Method != http.MethodGet {
@@ -543,6 +515,9 @@ func main() {
 
 	// Endpoint exclusivo para recibir los datos de la auditoría local de la Linux (Ollama)
 	mux.HandleFunc("/api/auditoria/recibir-local", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("🔵 -----------------------------------------------------------")
+		fmt.Println("🔵 Buzon recibiendo respuesta de Ollaama")
+		fmt.Println("🔵 -----------------------------------------------------------")
 		if r.Method != http.MethodPost {
 			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 			return
@@ -1009,7 +984,8 @@ func iniciarMotorSensado() {
 		}
 	}()
 
-	log.Println("🧠 [CÓRTEX]: Iniciando motor de sensado...")
+	// 🚀 Impresión única al arrancar con éxito el motor
+    log.Println("🧠 [CÓRTEX]: Iniciando motor de sensado... [Estado: OK]")	
 
 	for {
 		actividad := obtenerActividadRaton()
@@ -1031,7 +1007,7 @@ func iniciarMotorSensado() {
 		actualizarEstadoTelemetria(datos)
 		ultimoPulsoLocal = time.Now()
 
-		log.Printf("📡 [CÓRTEX]: Telemetría actualizada en nodo %s | Pulso: %v", datos.Nodo, ultimoPulsoLocal.Format("15:04:05"))
+		//log.Printf("📡 [CÓRTEX]: Telemetría actualizada en nodo %s | Pulso: %v", datos.Nodo, ultimoPulsoLocal.Format("15:04:05"))
 
 		time.Sleep(5 * time.Second)
 	}
