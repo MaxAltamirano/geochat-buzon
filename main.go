@@ -25,6 +25,12 @@ import (
 
 var db *sql.DB
 
+// 🛡️ Variables globales en el Córtex para retener el paquete en memoria
+var (
+	muAuditoria        sync.Mutex
+	ultimoPaqueteListo []byte // Acá guardamos el JSON crudo tal cual llega
+)
+
 // --- ESTRUCTURAS Y FUNCIONES DE SOPORTE PARA EL BUZÓN EN RENDER ---
 
 type DocumentacionAnalisis struct {
@@ -406,7 +412,6 @@ func main() {
 
 	// --- RUTAS DE AUDITORÍA Y BUZÓN SOBERANO ---
 
-
 	var miFraseSecreta = "Yo.Soy.Riqueza.Incalculable.Yo.Soy.Abundancia.Total"
 
 	// Middleware de Autorización Soberana
@@ -424,7 +429,7 @@ func main() {
 	// 1. Endpoint de latido (Verificación de ADN)
 	mux.HandleFunc("/api/sync/heartbeat", autorizarSoberano(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		// Corregido: calcularHash devuelve solo un valor (string)
 		hashRemoto := calcularHash("main.go")
 		if hashRemoto == "" {
@@ -438,7 +443,7 @@ func main() {
 			ADNHash:   hashRemoto,
 			Status:    "ONLINE",
 		}
-		
+
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(estado)
 	}))
@@ -473,19 +478,95 @@ func main() {
 	// Registrar la ruta exacta que consultará Render
 	http.HandleFunc("/api/sincronizar/pendientes", HandlerEntregarPendientes)
 
-	
+	// 1. Endpoint POST: La Linux local manda el paquete procesado por Ollama y se guarda en la variable global
+	mux.HandleFunc("/api/auditoria/recibir-local", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "mensaje": "Método no permitido"})
+			return
+		}
 
-	// 2. Endpoint donde el worker local consulta los resultados ya procesados por Ollama
+		cuerpo, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "mensaje": "Error leyendo el payload"})
+			return
+		}
+
+		muAuditoria.Lock()
+		ultimoPaqueteListo = cuerpo // Guarda el paquete actual (si entra el 2, reemplaza/pisa el espacio)
+		muAuditoria.Unlock()
+
+		log.Printf("📥 [CÓRTEX BUZÓN]: Paquete de auditoría recibido y retenido (%d bytes)", len(cuerpo))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"status":  "success",
+			"mensaje": "Paquete retenido en memoria para despacho",
+		})
+	}))
+
+	// 2. Endpoint GET: El worker viene a buscar el paquete, se lo lleva, y la variable se limpia (FIFO estricto de a uno)
 	mux.HandleFunc("/api/auditoria/resultados-listos", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+
+		fmt.Println("🔵 -----------------------------------------------------------")
+		fmt.Println("🔵 [ESTAMOS DENTRO DEL WORKER]: Vigía de red encendido...")
+		fmt.Println("🔵 -----------------------------------------------------------")
+
 		if r.Method != http.MethodGet {
 			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
 			return
 		}
 
+		muAuditoria.Lock()
+		defer muAuditoria.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+
+		// Si no hay paquete listo, informamos que está en espera
+		if len(ultimoPaqueteListo) == 0 {
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"status": "sin_resultados_pendientes",
+			})
+			return
+		}
+
+		// 📤 Entregamos el paquete actual al worker
+		w.WriteHeader(http.StatusOK)
+		w.Write(ultimoPaqueteListo)
+
+		// 🧹 Limpiamos la variable global para que quede lista y vacía para el siguiente paquete
+		ultimoPaqueteListo = nil
+	}))
+
+	// Endpoint exclusivo para recibir los datos de la auditoría local de la Linux (Ollama)
+	mux.HandleFunc("/api/auditoria/recibir-local", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Leemos todo el cuerpo del POST tal cual viene de la Linux local
+		cuerpo, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Error leyendo el payload", http.StatusBadRequest)
+			return
+		}
+
+		// 🔒 Protegemos la variable global y guardamos el paquete crudo
+		muAuditoria.Lock()
+		ultimoPaqueteListo = cuerpo
+		muAuditoria.Unlock()
+
+		log.Printf("📥 [CÓRTEX BUZÓN]: Paquete de auditoría recibido y retenido en memoria (%d bytes)", len(cuerpo))
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]string{
-			"status": "sin_resultados_pendientes",
+			"status":  "success",
+			"mensaje": "Paquete retenido con éxito en el Córtex",
 		})
 	}))
 
