@@ -788,6 +788,7 @@ func EnviarAOllamaNube(nombreArchivo string, contenido string) (string, error) {
 		ollamaURL = "http://localhost:11434"
 	}
 
+	fmt.Printf("[AUDITORÍA BUZÓN] Enviando a Ollama: %s\n", string(jsonData))
 	resp, err := http.Post(ollamaURL+"/api/generate", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "Auditoría simulada por fallback (Sin conexión a Ollama)", nil
