@@ -27,11 +27,24 @@ var db *sql.DB
 
 // 🛡️ Variables globales en el Córtex para retener el paquete en memoria
 var (
+	muBuzonSync             sync.Mutex
+    ultimoCheckpointEnviado MensajeCheckpointBuzon
 	muAuditoria        sync.Mutex
 	ultimoPaqueteListo []byte // Acá guardamos el JSON crudo tal cual llega
+	hayCheckpointPendiente  bool
 )
 
 // --- ESTRUCTURAS Y FUNCIONES DE SOPORTE PARA EL BUZÓN EN RENDER ---
+
+type MensajeCheckpointBuzon struct {
+    TipoAccion         string    `json:"tipo_accion"`
+    IDPadre            string    `json:"id_padre"`
+    FilePath           string    `json:"file_path"`
+    ContenidoCodigo    string    `json:"contenido_codigo"`
+    TamanioBytes       int64     `json:"tamanio_bytes"`
+    TimestampInyeccion time.Time `json:"timestamp_inyeccion"`
+    Timestamp          time.Time `json:"timestamp"`
+}
 
 type DocumentacionAnalisis struct {
 	IDIdea               string    `json:"id_idea"`
@@ -493,40 +506,45 @@ func main() {
 		ultimoPaqueteListo = nil
 	}))
 
-	// 2. Endpoint GET: El worker viene a buscar el paquete, se lo lleva, y la variable se limpia (FIFO estricto de a uno)
-	mux.HandleFunc("/api/auditoria/resultados-listos", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	// Endpoint para que el worker local venga a buscar su chunk de trabajo pendiente en la nube
+    mux.HandleFunc("/api/auditoria/resultados-listos", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodGet {
+            http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+            return
+        }
 
-		fmt.Println("🔵 -----------------------------------------------------------")
-		fmt.Println("🔵 Buzon mandando respuesta de Ollaama")
-		fmt.Println("🔵 -----------------------------------------------------------")
+        muBuzonSync.Lock()
+        // Verificamos si hay un chunk pendiente de despachar hacia la Linux local
+        if !hayCheckpointPendiente {
+            muBuzonSync.Unlock()
+            w.Header().Set("Content-Type", "application/json")
+            w.WriteHeader(http.StatusOK)
+            _ = json.NewEncoder(w).Encode(map[string]string{
+                "status": "sin_resultados_pendientes",
+            })
+            return
+        }
 
-		if r.Method != http.MethodGet {
-			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
-			return
-		}
+        // Serializamos el checkpoint/chunk exacto que preparó Render
+        payloadChunk, err := json.Marshal(ultimoCheckpointEnviado)
+        if err != nil {
+            muBuzonSync.Unlock()
+            http.Error(w, "Error serializando chunk", http.StatusInternalServerError)
+            return
+        }
 
-		muAuditoria.Lock()
-		defer muAuditoria.Unlock()
+        // Limpiamos el flag para que este chunk no se repita y quede listo para el siguiente
+        hayCheckpointPendiente = false
+        muBuzonSync.Unlock()
 
-		w.Header().Set("Content-Type", "application/json")
+        fmt.Println("🔵 -----------------------------------------------------------")
+        fmt.Println("🔵 [RENDER -> LINUX LOCAL]: Despachando chunk de código hacia el worker local...")
+        fmt.Println("🔵 -----------------------------------------------------------")
 
-		// Si no hay paquete listo, informamos que está en espera
-		if len(ultimoPaqueteListo) == 0 {
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(map[string]string{
-				"status": "sin_resultados_pendientes",
-			})
-			return
-		}
-
-		// 📤 Entregamos el paquete actual al worker
-		w.WriteHeader(http.StatusOK)
-		w.Write(ultimoPaqueteListo)
-
-		// 🧹 Limpiamos la variable global para que quede lista y vacía para el siguiente paquete
-		ultimoPaqueteListo = nil
-	}))
-
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        w.Write(payloadChunk)
+    }))
 	// Endpoint exclusivo para recibir los datos de la auditoría local de la Linux (Ollama)
 	mux.HandleFunc("/api/auditoria/recibir-local", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("🔵 -----------------------------------------------------------")
