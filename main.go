@@ -376,7 +376,7 @@ func HandlerEntregarPendientes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("[LINUX LOCAL] Sincronización exitosa: Se entregaron %d ítems pendientes a Render.\n", len(pendientes))
+	fmt.Printf("--------->>[LINUX LOCAL] Sincronización exitosa: Se entregaron %d ítems pendientes a Render.\n", len(pendientes))
 }
 
 // --- FUNCIÓN PRINCIPAL (ENTRYPOINT SOBERANO) ---
@@ -476,8 +476,8 @@ func main() {
 	}))
 
 	// Registrar la ruta exacta que consultará Render
-	http.HandleFunc("/api/sincronizar/pendientes", HandlerEntregarPendientes)
-
+// ✅ CORRECTO (Registrado en el mux principal del servidor)
+mux.HandleFunc("/api/sincronizar/pendientes", corsMiddleware(HandlerEntregarPendientes))
 
 	// 2. Endpoint GET: El worker viene a buscar el paquete, se lo lleva, y la variable se limpia (FIFO estricto de a uno)
 	mux.HandleFunc("/api/auditoria/resultados-listos", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
