@@ -341,42 +341,29 @@ func HandlerEntregarPendientes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Consultar tu PostgreSQL local para traer todos los ítems con estado "PENDIENTE"
-	rows, err := db.Query("SELECT id_idea, file_path, nombre_archivo, contenido_original FROM auditorias WHERE estado = 'PENDIENTE' ORDER BY fecha_creacion ASC")
-	if err != nil {
-		fmt.Printf("[LINUX LOCAL] Error al consultar la DB local: %v\n", err)
-		http.Error(w, "Error interno de base de datos", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
+	// 🔒 Proteger el búfer global en memoria
+	muAuditoria.Lock()
+	defer muAuditoria.Unlock()
 
-	var pendientes []DocumentacionAnalisis
-
-	// 3. Recorrer los resultados y armar el slice de pendientes
-	for rows.Next() {
-		var doc DocumentacionAnalisis
-		if err := rows.Scan(&doc.IDIdea, &doc.FilePath, &doc.NombreArchivo, &doc.ContenidoOriginal); err != nil {
-			fmt.Printf("[LINUX LOCAL] Error al escanear fila: %v\n", err)
-			continue
-		}
-		pendientes = append(pendientes, doc)
-	}
-
-	// Si no hay pendientes, devolvemos un array vacío JSON en lugar de null
-	if pendientes == nil {
-		pendientes = []DocumentacionAnalisis{}
-	}
-
-	// 4. Configurar cabecera y responderle a Render con el JSON exacto
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 
-	if err := json.NewEncoder(w).Encode(pendientes); err != nil {
-		fmt.Printf("[LINUX LOCAL] Error al codificar JSON para Render: %v\n", err)
+	// 2. Si no hay paquete listo en el búfer, informamos que está en espera
+	if len(ultimoPaqueteListo) == 0 {
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"status": "sin_resultados_pendientes",
+		})
 		return
 	}
 
-	fmt.Printf("--------->>[LINUX LOCAL] Sincronización exitosa: Se entregaron %d ítems pendientes a Render.\n", len(pendientes))
+	// 3. 📤 Entregamos el chunk actual al worker local
+	w.WriteHeader(http.StatusOK)
+	w.Write(ultimoPaqueteListo)
+
+	fmt.Printf("--------->>[CÓRTEX BUZÓN]: Sincronización exitosa: Se entregó el chunk pendiente al worker.\n")
+
+	// 4. 🧹 Limpiamos el búfer para dejarlo listo y vacío para el siguiente (FIFO estricto)
+	ultimoPaqueteListo = nil
 }
 
 // --- FUNCIÓN PRINCIPAL (ENTRYPOINT SOBERANO) ---
@@ -476,8 +463,35 @@ func main() {
 	}))
 
 	// Registrar la ruta exacta que consultará Render
-// ✅ CORRECTO (Registrado en el mux principal del servidor)
-mux.HandleFunc("/api/sincronizar/pendientes", corsMiddleware(HandlerEntregarPendientes))
+	// ✅ CORRECTO (Registrado en el mux principal del servidor)
+
+	mux.HandleFunc("/api/sincronizar/pendientes", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+			return
+		}
+
+		muAuditoria.Lock()
+		defer muAuditoria.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+
+		// Si no hay paquete listo en el búfer, informamos que está en espera
+		if len(ultimoPaqueteListo) == 0 {
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"status": "sin_resultados_pendientes",
+			})
+			return
+		}
+
+		// 📤 Entregamos el paquete actual al worker
+		w.WriteHeader(http.StatusOK)
+		w.Write(ultimoPaqueteListo)
+
+		// 🧹 Limpiamos el búfer para que quede listo y vacío para el siguiente
+		ultimoPaqueteListo = nil
+	}))
 
 	// 2. Endpoint GET: El worker viene a buscar el paquete, se lo lleva, y la variable se limpia (FIFO estricto de a uno)
 	mux.HandleFunc("/api/auditoria/resultados-listos", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -986,7 +1000,7 @@ func iniciarMotorSensado() {
 	}()
 
 	// 🚀 Impresión única al arrancar con éxito el motor
-    log.Println("🧠 [CÓRTEX]: Iniciando motor de sensado... [Estado: OK]")	
+	log.Println("🧠 [CÓRTEX]: Iniciando motor de sensado... [Estado: OK]")
 
 	for {
 		actividad := obtenerActividadRaton()
