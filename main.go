@@ -478,6 +478,43 @@ func main() {
 	// Registrar la ruta exacta que consultará Render
 	// ✅ CORRECTO (Registrado en el mux principal del servidor)
 
+
+	// Endpoint para que el backend de Render deposite el chunk a procesar
+    mux.HandleFunc("/api/auditoria/depositar-chunk", corsMiddleware(autorizarSoberano(func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+            http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
+            return
+        }
+
+        cuerpo, err := io.ReadAll(r.Body)
+        if err != nil {
+            http.Error(w, "Error leyendo el chunk", http.StatusBadRequest)
+            return
+        }
+
+        // Deserializamos temporalmente para asegurarnos de que viene bien estructurado
+        var chunk MensajeCheckpointBuzon
+        if err := json.Unmarshal(cuerpo, &chunk); err != nil {
+            http.Error(w, "Error en el formato JSON del chunk", http.StatusBadRequest)
+            return
+        }
+
+        // Guardamos en las variables globales del buzón protegido por el mutex
+        muBuzonSync.Lock()
+        ultimoCheckpointEnviado = chunk
+        hayCheckpointPendiente = true
+        muBuzonSync.Unlock()
+
+        log.Printf("---------------->>☁️ [CÓRTEX BUZÓN]: Chunk recibido desde el backend y retenido para el worker (ID Padre: %s)", chunk.IDPadre)
+
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        _ = json.NewEncoder(w).Encode(map[string]string{
+            "status":  "success",
+            "mensaje": "Chunk depositado y listo para el worker",
+        })
+    })))
+
 	mux.HandleFunc("/api/sincronizar/pendientes", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Método no permitido", http.StatusMethodNotAllowed)
