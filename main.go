@@ -402,6 +402,19 @@ func main() {
 		log.Println("📁 [SISTEMA]: Carpeta ./storage lista y asegurada.")
 	}
 
+	// --- 🛡️ SANEAMIENTO PREVENTIVO DE LA MEMORIA RAM AL ARRANCAR ---
+    muBuzonSync.Lock()
+    hayCheckpointPendiente = false
+    ultimoCheckpointEnviado = MensajeCheckpointBuzon{}
+    muBuzonSync.Unlock()
+
+    muAuditoria.Lock()
+    ultimoPaqueteListo = nil
+    muAuditoria.Unlock()
+
+    log.Println("---->>🛡️ [BUZON -RENDER]: Memoria RAM del buzón purgada y limpia desde el inicio.")
+    // ------------------------------------------------------------------
+
 	// 2. Definición del Mux Unificado
 	mux := http.NewServeMux()
 
