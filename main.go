@@ -461,6 +461,25 @@ func main() {
 		_ = json.NewEncoder(w).Encode(estado)
 	}))
 
+	// 📊 Endpoint de Telemetría Global del Córtex en Render
+	mux.HandleFunc("/api/telemetria", corsMiddleware(autorizarSoberano(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "mensaje": "Método no permitido"})
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":     "ONLINE",
+			"nodo":       "Buzón Cloud Render",
+			"frecuencia": "432Hz",
+			"timestamp":  time.Now().Format(time.RFC3339),
+		})
+	})))
+
 	// 2. Endpoint de autosanación (Parcheo)
 	mux.HandleFunc("/api/sync/parchear", autorizarSoberano(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -735,12 +754,17 @@ func main() {
 				continue
 			}
 			go func(c net.Conn) {
-				defer c.Close()
-				scanner := bufio.NewScanner(c)
-				for scanner.Scan() {
-					log.Printf("📡 [RELÉ]: Nodo activo: %s", scanner.Text())
-				}
-			}(conn)
+    defer c.Close()
+    scanner := bufio.NewScanner(c)
+    for scanner.Scan() {
+        log.Printf("📡 [RELÉ]: Nodo activo: %s", scanner.Text())
+    }
+
+    // 🛡️ CHEQUEO SOBERANO OBLIGATORIO POST-SCANNER (Para calmar la alerta)
+    if err := scanner.Err(); err != nil {
+        log.Printf("⚠️ [ERROR SCANNER]: Error durante la lectura del flujo en el relé: %v", err)
+    }
+}(conn)
 		}
 	}()
 
@@ -1342,7 +1366,7 @@ func recibirMensajeExterno(w http.ResponseWriter, r *http.Request) {
 	mu.Unlock()
 
 	w.WriteHeader(http.StatusAccepted)
-	w.Write([]byte(fmt.Sprintf(`{"status":"success", "id":%d}`, m.ID)))
+	w.Write(fmt.Appendf(nil, `{"status":"success", "id":%d}`, m.ID))
 }
 
 func vaciarCola(w http.ResponseWriter, r *http.Request) {
